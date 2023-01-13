@@ -201,8 +201,10 @@ We can then look at the future weather forecasts in the same way but using the `
 ```{r, message=FALSE}
 # New forecast only available at 5am UTC the next day
 
-forecast_date <- Sys.Date() 
-noaa_date <- forecast_date - days(1)
+# forecast_date <- Sys.Date() 
+# noaa_date <- forecast_date - days(1)
+forecast_date <- Sys.Date() - days(3) 
+noaa_date <- forecast_date - days(4)
 
 df_future <- neon4cast::noaa_stage2()
 
@@ -367,7 +369,7 @@ We need to make sure the dataframe is in the correct format and then we can subm
 
 ```{r}
 # Remember to change the model_id when you make changes to the model structure!
-my_model_id <- 'temp_name'
+my_model_id <- 'wtemp_lm_model'
 
 temp_lm_forecast_EFI <- temp_lm_forecast %>%
   mutate(model_id = my_model_id,
@@ -718,7 +720,7 @@ RW_forecast %>%
 The forecast output from `fable` needs modifying slightly to fit the Challenge standards. 
 
 ```{r}
-model_name <- 'example_RW'
+model_name <- 'wtemp_RW_model'
 RW_forecasts_EFI <- RW_forecast %>%
   rename(parameter = .rep,
          prediction = .sim) %>%
@@ -836,7 +838,7 @@ convert_to_efi_standard <- function(df, model_id){
 ```
 
 ```{r warning = FALSE}
-model_name <- 'example_climatology'
+model_name <- 'wtemp_clim_model'
 SN_forecast_EFI <- convert_to_efi_standard(SN_forecast, 
                                            model_id = model_name)
 ```
@@ -875,6 +877,8 @@ forecast_name_3 <- paste0(SN_forecast_EFI$model_id[1], ".csv")
 forecast_file_3 <- paste(theme, date, forecast_name_3, sep = '-')
 
 write_csv(SN_forecast_EFI, forecast_file_3)
+
+neon4cast::forecast_output_validator(forecast_file_3)
 
 ```
 ## Submit forecast 
