@@ -1,11 +1,9 @@
 # NEON-forecast-challenge-workshop materials
-This is a repository for for the workshop materials initally used in the Forecast Challenge part of the GLEON2022 workshop.
+This is a repository for materials to complete the NEON Ecological Forecasting Challenge workshop using data and sites from the terrestrial daily theme.
 
 ```{r gh-installation, eval = FALSE}
 The following packages will need to be installed
 install.packages('remotes')
-install.packages('fpp3') # package for applying simple forecasting methods
-install.packages('tsibble') # package for dealing with time series data sets and tsibble objects
 install.packages('tidyverse') # collection of R packages for data manipulation, analysis, and visualisation
 install.packages('lubridate') # working with dates and times
 remotes::install_github('eco4cast/neon4cast') # package from NEON4cast challenge organisers to assist with forecast building and submission
