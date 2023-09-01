@@ -114,7 +114,7 @@ targets <- targets |>
 ```
 
 ## Visualise the data
-```{r eval = T, echo = F, warning=FALSE, fig.dim=c(10,10), fig.cap=c('Figure: Targets data at terrestrial sites provided by EFI for the NEON forecasting challgenge')}
+```{r targets, eval = T, echo = F, warning=FALSE, fig.dim=c(10,10), fig.cap=c('Figure: Targets data at terrestrial sites provided by EFI for the NEON forecasting challgenge')}
 sites1 <- site_data[1:12,]
 sites2 <- site_data[13:24,]
 sites3 <- site_data[25:36,]
@@ -182,7 +182,7 @@ You can read more about the NOAA forecasts available for the NEON sites [here:](
 
 We will generate a `nee` forecast using `air_temperature` and `solar_radiation` as a co-variates. As an example of the workflow we will work with 1 site - HARV (Harvard deciduous forest).
 
-```{r}
+```{r HARV}
 example_site <- 'HARV'
 
 targets |> 
@@ -277,7 +277,7 @@ noaa_future_daily_example
 
 Now we have a timeseries of historic data and a 30 member ensemble forecast of future air temperatures and shortwave for one site. 
 
-```{r echo = F, fig.cap = c('Figure: historic and future NOAA air temeprature forecasts for 1 NEON site', 'Figure: historic and future NOAA shortwave forecasts for 1 NEON site ')}
+```{r NOAA-HARV, echo = F, fig.cap = c('Figure: historic and future NOAA air temeprature forecasts for 1 NEON site', 'Figure: historic and future NOAA shortwave forecasts for 1 NEON site')}
 noaa_future_daily_example |> 
   filter(site_id == 'HARV') |> 
   ggplot(aes(x=datetime, y=air_temperature)) +
@@ -321,17 +321,17 @@ We can fit a separate linear model for each site. For example, at HARV forest (H
 
 ```{r, eval = T}
 
-#Fit linear model based on past data: water temperature = m * air temperature + b
+#Fit linear model based on past data: NEE = a * air temperature + b * shortwave
 fit <- lm(targets_lm_example$nee ~ targets_lm_example$air_temperature + targets_lm_example$shortwave)
     
-# use linear regression to forecast water temperature for each ensemble member
+# use linear regression to forecast NEE for each ensemble member
 forecasted_nee <- fit$coefficients[1] + 
   (fit$coefficients[2] * noaa_future_daily_example$air_temperature) + 
   (fit$coefficients[3] * noaa_future_daily_example$shortwave)
 
 ```
 
-```{r}
+```{r example-forecast}
   # put all the relevent information into a tibble that we can bind together
   NEE <- tibble(datetime = noaa_future_daily_example$datetime,
                         site_id = "HARV",
