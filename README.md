@@ -52,7 +52,7 @@ There are 3 options for getting the code locally so that you can run it, dependi
 More information on forking and cloning in R can be found at [happygitwithr](https://happygitwithr.com/fork-and-clone.html), a great resource to get you started using version control with RStudio. 
 
 
-For the workshop you can follow along via the rmarkdown document (`Submit_forecast/NEON_forecast_challenge_workshop_aquatics.Rmd`) or the md (`Submit_forecast/NEON_forecast_challenge_workshop_aquatics.md`), both of which can be downloaded here or you can fork the whole repository.
+For the workshop you can follow along via the rmarkdown document (`Submit_forecast/NEON_forecast_challenge_workshop_terrestrial.Rmd`) or the md (`Submit_forecast/NEON_forecast_challenge_workshop_terrestrial.md`), both of which can be downloaded here or you can fork the whole repository.
 
 
 ## Optional: Use Docker
