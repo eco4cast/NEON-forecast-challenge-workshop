@@ -31,17 +31,26 @@ install.packages('fpp3') # package for applying simple forecasting methods
 install.packages('tsibble') # package for dealing with time series data sets and tsibble objects
 install.packages('tidyverse') # collection of R packages for data manipulation, analysis, and visualisation
 install.packages('lubridate') # working with dates and times
-remotes::install_github('eco4cast/neon4cast') # package from NEON4cast challenge organisers to assist with forecast building and submission
+remotes::install_github('eco4cast/neon4cast', force = TRUE) # package from NEON4cast challenge organisers to assist with forecast building and submission
 ```
 
 Additionally, R version 4.2 is required to run the neon4cast package. It's also worth checking your Rtools is up to date and compatible with R 4.2, see (https://cran.r-project.org/bin/windows/Rtools/rtools42/rtools.html). 
 
 
-```{r}
-version$version.string
-
+```{r, message = FALSE}
+# install.packages("tidyverse")
+# install.packages("lubridate")
+# install.packages("RColorBrewer")
+# install.packages("ggthemes")
 library(tidyverse)
 library(lubridate)
+library(RColorBrewer)
+library(ggthemes)
+library(remotes)
+library(fpp3)
+library(tsibble)
+set.seed(100)
+
 ```
 
 If you do not wish to run the code yourself you can follow along via the html (NEON_forecast_challenge_workshop.md), which can be downloaded from the [Github repository](https://github.com/OlssonF/NEON-forecast-challenge-workshop). 
@@ -80,6 +89,7 @@ We start forecasting by first looking at the historic data - called the 'targets
 targets <- read_csv('https://data.ecoforecast.org/neon4cast-targets/aquatics/aquatics-targets.csv.gz')
 ```
 
+
 Information on the NEON sites can be found in the `NEON_Field_Site_Metadata_20220412.csv` file on GitHub. It can be filtered to only include aquatic sites. This table has information about the field sites, including location, ecoregion, information about the watershed (e.g. elevation, mean annual precipitation and temperature), and lake depth. 
  
 ```{r eval=TRUE, echo = TRUE, error=FALSE, warning=FALSE, message=FALSE}
@@ -91,7 +101,6 @@ aquatic_sites <- read_csv("https://raw.githubusercontent.com/eco4cast/neon4cast-
 Let's take a look at the targets data!
 ```{r eval = T, echo = F}
 targets[1000:1010,]
-
 ```
 
 The columns of the targets file show the time step (daily for aquatics challenge), the 4 character site code (`site_id`), the variable being measured, and the mean daily observation. To look at only the lakes we can subset the targets and aquatic sites to those which have the `field_site_subtype` of `Lake`. 
@@ -103,6 +112,8 @@ lake_sites <- aquatic_sites %>%
 targets <- targets %>%
   filter(site_id %in% lake_sites$field_site_id)
 ```
+
+
 
 ## Visualise the data
 ```{r eval = T, echo = F, warning=FALSE, fig.dim=c(10,10), fig.cap=c('Figure: Temperature targets data at aquatic sites provided by EFI for the NEON forecasting challgenge', 'Figure: Oxygen targets data at aquatic sites provided by EFI for the NEON forecasting challgenge', 'Figure: Chlorophyll targets data at aquatic sites provided by EFI for the NEON forecasting challgenge. Chlorophyll data is only available at lake and river sites')}
@@ -185,11 +196,34 @@ This is a stacked ensemble forecast of the one day ahead forecasts. To get an es
 # aggregate the past to mean values
 noaa_past_mean <- noaa_past |> 
   mutate(datetime = as_date(datetime)) |> 
-  group_by(datetime, site_id, variable) |> 
+  group_by(datetime, site_id, variable, parameter) |> 
   summarize(prediction = mean(prediction, na.rm = TRUE), .groups = "drop") |> 
   pivot_wider(names_from = variable, values_from = prediction) |> 
   # convert air temp to C
   mutate(air_temperature = air_temperature - 273.15)
+```
+
+Calculate daily mean values for each site
+```{r}
+# aggregate the past to daily mean values
+noaa_daily_mean <- noaa_past_mean |> 
+  mutate(datetime = as_date(datetime)) |> 
+  group_by(datetime, site_id) |> 
+  summarize(air_temperature = mean(air_temperature, na.rm = TRUE),
+            air_pressure = mean(air_pressure, na.rm = TRUE), .groups = "drop")
+
+```
+
+Data wrangling of observed air temperature data at Lakes so we can plot observed and forecasted air temperature on one time series plot.
+```{r}
+#Bind lake water temperature to noaa past air temperature and pressure
+#Also, pivot wider to join the water temp from targets to new dataframe to model
+merged_df <- targets %>%
+  pivot_wider(names_from = variable, values_from = observation)
+
+#Join this dataset with noaa past mean to have all variables in a single df
+model_df <- dplyr::left_join(merged_df, noaa_daily_mean, join_by("datetime", "site_id"), unmatched = "drop")
+
 ```
 
 We can then look at the future weather forecasts in the same way but using the `noaa_stage2()`. The forecast becomes available from NOAA at 5am UTC the following day, so we take the air temperature forecast from yesterday (`noaa_date`) to make the water quality forecasts. Then we can use the ensembles to produce uncertainty in the water temperature forecast by forecasting multiple (31) future water temperatures. 
@@ -213,6 +247,7 @@ noaa_future <- noaa_future_s3 |>
 
 ```
 
+
 The forecasts are hourly and we are interested in using daily mean air temperature for water temperature forecast generation.
 
 ```{r warning=F}
@@ -228,7 +263,48 @@ noaa_future_daily <- noaa_future |>
 
 noaa_future_daily
 ```
-Now we have a timeseries of historic data and a 30 member ensemble forecast of future air temperatures
+
+
+Select the observed and modeled air temperature forecast for your forecasting time period
+
+```{r}
+for(i in 1:length(lake_sites$field_site_id)) { 
+forecast_start_date <- Sys.Date()
+
+past_lake_temp <- noaa_daily_mean %>%
+  filter(datetime >= "2024-02-07" & datetime <= "2024-02-18") %>%
+  mutate(air_temperature = ifelse(datetime > forecast_start_date, NA, air_temperature),
+         air_pressure = ifelse(datetime > forecast_start_date, NA, air_pressure))
+
+#select the date range for noaa air temperature values as well
+future_lake_temp <- noaa_future_daily %>%
+  filter(datetime >= "2024-02-07" & datetime <= "2024-02-18")
+  #mutate(air_temperature = ifelse(datetime > forecast_start_date, NA, air_temperature),
+         #air_pressure = ifelse(datetime > forecast_start_date, NA, air_pressure))
+
+}
+```
+
+
+Plot the timeseries for all the lakes for the forecast interval of your interest.
+
+```{r}
+ggplot(past_lake_temp, aes(x=datetime, y=air_temperature)) +
+  geom_point()+
+  geom_line(data = future_lake_temp, aes(x=datetime, y=air_temperature, group = parameter, alpha = 0.4)) +
+  geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+  facet_wrap(~site_id, scales = 'free')
+
+ggplot(past_lake_temp, aes(x=datetime, y=air_pressure)) +
+  geom_point()+
+  geom_line(data = future_lake_temp, aes(x=datetime, y=air_pressure, group = parameter, alpha = 0.4)) +
+  geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+  geom_line(data = future_lake_temp, aes(group = parameter), alpha = 0.4)+
+  facet_wrap(~site_id, scales = 'free')
+```
+
+
+Now we have a time series of historic data and a 30 member ensemble forecast of future air temperatures
 
 ```{r echo = F, fig.cap = c('Figure: historic and future NOAA air temeprature forecasts at lake sites', 'Figure: last two months of historic air temperature forecasts and 35 day ahead forecast')}
 ggplot(noaa_future_daily, aes(x=datetime, y=air_temperature)) +
@@ -263,34 +339,46 @@ We will fit a simple linear model between historic air temperature and the water
 
 We will start by joining the historic weather data with the targets to aid in fitting the linear model.
 
-```{r}
-targets_lm <- targets |> 
-  filter(variable == 'temperature') |>
-  pivot_wider(names_from = 'variable', values_from = 'observation') |> 
-  left_join(noaa_past_mean, 
-            by = c("datetime","site_id"))
+### Fit model
 
-targets_lm[1000:1010,]
+First, build a data frame to fit the model. We will create a column `wtemp_yday` which is a column of 1-day lags of water temperature.
+
+```{r}
+model_lag_data <- model_df %>%
+  group_by(site_id) %>%
+  mutate(wtemp_yday = lag(temperature))
+head(model_lag_data)
+```
+
+
+```{r}
+#targets_lm <- targets |> 
+  #filter(variable == 'temperature') |>
+  #pivot_wider(names_from = 'variable', values_from = 'observation') |> 
+  #left_join(noaa_past_mean, 
+            #by = c("datetime","site_id"))
+
+#targets_lm[1000:1010,]
 ```
 
 
 To fit the linear model we use the base R `lm()` but there are also methods to fit linear (and non-linear) models in the `fable::` package. You can explore the [documentation](https://otexts.com/fpp3/regression.html) for more information on the `fable::TSLM()` function. We can fit a separate linear model for each site. For example, at Lake Suggs, this would look like:
 
 ```{r, eval = F}
-example_site <- 'SUGG'
+#example_site <- 'SUGG'
 
-site_target <- targets_lm |> 
-  filter(site_id == example_site)
+#site_target <- targets_lm |> 
+  #filter(site_id == example_site)
 
-noaa_future_site <- noaa_future_daily |> 
-  filter(site_id == example_site)
+#noaa_future_site <- noaa_future_daily |> 
+ # filter(site_id == example_site)
 
 #Fit linear model based on past data: water temperature = m * air temperature + b
-fit <- lm(site_target$temperature ~ site_target$air_temperature*site_target$air_pressure)
-summary(fit)
+#fit <- lm(site_target$temperature ~ site_target$air_temperature*site_target$air_pressure)
+#summary(fit)
     
 # use linear regression to forecast water temperature for each ensemble member
-forecasted_temperature <- fit$coefficients[1] + fit$coefficients[2] * noaa_future_site$air_temperature + fit$coefficients[3] * noaa_future_site$air_pressure
+#forecasted_temperature <- fit$coefficients[1] + fit$coefficients[2] * noaa_future_site$air_temperature + fit$coefficients[3] * noaa_future_site$air_pressure
 
 ```
 
@@ -299,27 +387,73 @@ We can loop through this for each site to create a site-wise forecast of water t
 
 ## Specify forecast model
 
+
 ```{r}
 temp_lm_forecast <- NULL
+temp_lm_forecast_allsites <- NULL
+temp_lm_past_predict <- NULL
 
 for(i in 1:length(lake_sites$field_site_id)) {  
-  
+  #selects the site that comes first on the loop from all lake site dataset created above
   example_site <- lake_sites$field_site_id[i]
-  
-  site_target <- targets_lm |>
+  #pulls all the data related to selected site from the target dataset used to model 
+  site_target <- model_lag_data |>
     filter(site_id == example_site)
-
-  noaa_future_site <- noaa_future_daily |> 
+  #pulls all the data related to selected site from the noaa future daily dataset
+  noaa_future_site <- future_lake_temp |> 
     filter(site_id == example_site)
   
   #Fit linear model based on past data: water temperature = m * air temperature + b
-  fit <- lm(site_target$temperature ~ site_target$air_temperature*site_target$air_pressure)
-  # fit <- lm(site_target$temperature ~ ....)
-    
+  fit <- lm(site_target$temperature ~ site_target$air_temperature + site_target$air_pressure + site_target$wtemp_yday)
+  fit_summary <- summary(fit)
+  fit_summary
+  
+  #Predict water temperature for the past time of your forecast period of interest using the same model
+  past_predict <- past_lake_temp %>%
+    filter(site_id == example_site)
+  pp_wtemp = fit$coefficients[1] + fit$coefficients[2] *past_predict$air_temperature + fit$coefficients[3] * past_predict$air_pressure
+  
+  # put all the relevant information into a tibble that we can bind together
+  wtemp_pastperiod <- tibble(datetime = past_predict$datetime,
+                        site_id = example_site,
+                        wtemp = pp_wtemp,
+                        variable = "wtemperature")
+  temp_lm_past_predict <- dplyr::bind_rows(temp_lm_past_predict, wtemp_pastperiod)
+  
+  #Predict water temp for your forecasting period to use lag wtemp values
+  noaa_future_site$fcast_wtemp = fit$coefficients[1] + fit$coefficients[2] * noaa_future_site$air_temperature + fit$coefficients[3] * noaa_future_site$air_pressure
+  
+  # put all the relevant information into a tibble that we can bind together
+  wtemp_toplot <- tibble(datetime = noaa_future_site$datetime,
+                        site_id = example_site,
+                        parameter = noaa_future_site$parameter,
+                        wtemp = noaa_future_site$fcast_wtemp,
+                        variable = "wtemperature")
+  temp_lm_forecast_allsites <- dplyr::bind_rows(temp_lm_forecast_allsites, wtemp_toplot)
+  
+  #Create a lag and use yesterday's water temp to predict future water temperature
+  my_lag_data <-  noaa_future_site %>%
+    group_by(datetime) %>%
+    summarize(fcast_wtemp = mean(fcast_wtemp)) %>%
+  mutate(fwtemp_yday = lag(fcast_wtemp))
+  
+  #Equalize number of rows in site target and future data 
+  a <- nrow(site_target)
+  b <- nrow(noaa_future_site)
+  n <- a-b
+  for(i in 1:(n)) {
+  proxy <- tibble(datetime = NA,
+                        site_id = NA,
+                        parameter = NA)
+  
+  noaa_future_site <- dplyr::bind_rows(noaa_future_site, proxy)
+  }
+  
   # use linear regression to forecast water temperature for each ensemble member
-  forecasted_temperature <- fit$coefficients[1] + fit$coefficients[2] * noaa_future_site$air_temperature + fit$coefficients[3] * noaa_future_site$air_pressure + fit$coefficients[4] * noaa_future_site$air_temperature*noaa_future_site$air_pressure
-    
-  # put all the relavent information into a tibble that we can bind together
+  forecasted_temperature <- fit$coefficients[1] + fit$coefficients[2] * noaa_future_site$air_temperature + fit$coefficients[3] * noaa_future_site$air_pressure + fit$coefficients[4] * my_lag_data$fwtemp_yday
+  
+  
+  # put all the relevant information into a tibble that we can bind together
   temperature <- tibble(datetime = noaa_future_site$datetime,
                         site_id = example_site,
                         parameter = noaa_future_site$parameter,
@@ -330,6 +464,8 @@ for(i in 1:length(lake_sites$field_site_id)) {
   message(example_site, ' temperature forecast run')
   
 }
+#remove all NAs from the dataset
+temp_lm_forecast_noNA <- temp_lm_forecast[!rowSums(is.na(temp_lm_forecast[1:5])), ]
 ```
 
 We now have 30 possible forecasts of water temperature at each site and each day. On this plot each line represents one of the possible forecasts and the range of forecasted water temperature is a simple quantification of the uncertainty in our forecast.
@@ -337,23 +473,30 @@ We now have 30 possible forecasts of water temperature at each site and each day
 Looking back at the forecasts we produced:
 
 ```{r, echo = F, warning = F}
-temp_lm_forecast %>% 
+temp_lm_past_predict %>% 
+  filter(variable == 'wtemperature') %>%
+  ggplot(.,aes(x=datetime, y=wtemp)) + 
+  geom_point()+
+  facet_wrap(~site_id)
+
+temp_lm_forecast_noNA %>% 
   filter(variable == 'temperature') %>%
   ggplot(.,aes(x=datetime, y=prediction, group = parameter)) + 
   geom_point(data = targets,aes(x=datetime, y=observation, group = 'obs'), colour = 'darkblue') +
-  geom_line(alpha = 0.3, aes(colour = 'ensemble member (parameter)')) + 
+  ylim (-5,10)+
+  geom_line(alpha = 0.5, aes(colour = 'ensemble member (parameter)')) + 
   facet_wrap(~site_id, scales = 'free_y') +
-  scale_x_date(expand = c(0,0), date_labels = "%d %b") +
+  scale_x_date(expand = c(0,0), date_labels = "%d %b", date_breaks = "4 days") +
   labs(y = 'value') +
-  geom_vline(aes(linetype = 'reference_datetime', xintercept = Sys.Date()), colour = 'blue', size = 1.5) +
+  geom_vline(aes(linetype = 'reference_datetime', xintercept = Sys.Date()), colour = 'blue', size = 0.5) +
   labs(title = 'site_id', subtitle = 'variable = temperature', caption = 'prediction') + 
-  annotate("text", x = Sys.Date() - days(10), y = 20, label = "past")  +
-  annotate("text", x = Sys.Date() + days(12), y = 20, label = "future")  +
+  annotate("text", x = Sys.Date() - days(10), y = -4, label = "past")  +
+  annotate("text", x = Sys.Date() + days(12), y = -4, label = "future")  +
   theme_bw() +
-  coord_cartesian(xlim = c(min(temp_lm_forecast$datetime) - 15,
-                           Sys.Date() + 30)) +
+  coord_cartesian(xlim = c(min(temp_lm_forecast_noNA$datetime) - 5,
+                           Sys.Date() + 7)) +
   scale_linetype_manual(values = 'dashed', name = '') +
-  scale_colour_manual(values = 'darkgrey', name = '') +
+  scale_colour_manual(values = 'black', name = '') +
   theme(strip.text = element_text(colour = 'orange'),
         axis.title.y = element_text(colour = 'green'),
         axis.title.x = element_text(colour = 'red'),
@@ -361,7 +504,684 @@ temp_lm_forecast %>%
         axis.text.x = element_text(colour = 'red'),
         plot.caption = element_text(hjust = 0, colour = 'purple'),
         plot.title = element_text(colour = 'orange'), 
-        plot.subtitle = element_text(colour = 'green')) 
+        plot.subtitle = element_text(colour = 'green'))
+```
+
+Combined plot of the past and future water temperature prediction for your time period of interest.
+```{r}
+ggplot() +
+  geom_point(data = temp_lm_past_predict, aes(x=datetime, y=wtemp))+
+    geom_line(data = temp_lm_forecast_noNA, aes(x = datetime, y = prediction, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id, scales = 'free')
+```
+
+
+
+```{r}
+
+for(i in 1:length(lake_sites$field_site_id)) {  
+  #selects the site that comes first on the loop from all lake site dataset created above
+  example_site <- lake_sites$field_site_id[i]
+  #pulls all the data related to selected site from the target dataset used to model 
+  site_target <- past_lake_temp |>
+    filter(site_id == example_site)
+  #pulls all the data related to selected site from the noaa future daily dataset
+  noaa_future_site <- future_lake_temp |> 
+    filter(site_id == example_site)
+  
+  #Predict water temp for your forecasting period to use lag wtemp values
+  past_wtemp = fit$coefficients[1] + fit$coefficients[2] * past_lake_temp$air_temperature + fit$coefficients[3] * past_lake_temp$air_pressure
+  
+}
+```
+
+Calculate model predictions.
+Clean the dataframe removing all rows with NAs.
+```{r}
+#noNA <- model_df[!rowSums(is.na(model_df[1:5])), ]
+```
+
+
+```{r}
+#mod <- predict(fit, data = noNA)
+#mod <- c(NA, mod)
+```
+
+Assess model fit by calculating $R^2$ (`r2`), mean bias (`err`), and RMSE (`RMSE`).
+
+```{r}
+r2 <- round(fit_summary$r.squared, 2) 
+#remove all NAs from the dataset
+#noaa_future_site_noNA <- noaa_future_site[!rowSums(is.na(noaa_future_site[1:6])), ]
+#make a data.frame with 10 rows of NA
+na_frame <- as.data.frame(matrix(NA, nrow = 217, ncol = 5))
+#add the names of mtcars
+names(na_frame) <- names(temp_lm_forecast_noNA)
+#bind together
+temp_lm_forecast_noNA <- dplyr::bind_rows(temp_lm_forecast_noNA, na_frame)
+residuals <- temp_lm_forecast_noNA$prediction - temp_lm_forecast_allsites$wtemp
+err <- mean(residuals, na.rm = TRUE) 
+rmse <- round(sqrt(mean((temp_lm_forecast_noNA$prediction - temp_lm_forecast_allsites$wtemp)^2, na.rm = TRUE)), 2) 
+```
+
+Prepare data frames for plotting.
+
+```{r}
+plot_fcast <- temp_lm_forecast_allsites %>%
+  group_by(datetime, site_id) %>%
+  summarize(wtemp = mean(wtemp)) %>%
+  filter(datetime >= "2024-02-11" & datetime <= "2024-02-18")
+
+plot_mod <-  temp_lm_forecast_noNA %>%
+  group_by(datetime, site_id) %>%
+  summarize(prediction = mean(prediction)) %>%
+  filter(datetime >= "2024-02-11" & datetime <= "2024-02-18")
+```
+
+```{r}
+ggplot() +
+    geom_point(data = plot_fcast, aes(datetime, wtemp, color = "Observed")) +
+    geom_line(data = plot_mod, aes(datetime, prediction, color = "Modeled")) +
+    ylab("Temperature (\u00B0C)") +
+    xlab("Time")+
+  facet_wrap(~site_id)
+```
+
+
+### Run Deterministic Water Temperature Forecast 
+
+Now we will generate a deterministic forecast with our model. We will use **one** ensemble member from the NOAA GEFS air temperature forecast ensemble as input to our multiple linear regression model, thus producing a water temperature prediction for 1 to 7 days into the future with no uncertainty.
+
+Set the number of ensemble members; this is set to 1 because we are making a deterministic forecast.
+
+```{r}
+n_members <- 1
+```
+
+Set up a date vector of dates we want to forecast. Our maximum forecast horizon (the farthest into the future we want to forecast) is 7 days.
+
+```{r}
+forecast_horizon <- 6
+forecasted_dates <- seq(from = ymd(forecast_start_date), to = ymd(forecast_start_date) + forecast_horizon, by = "day")
+```
+
+Pull the current observed water temperature as our initial, or starting, condition.
+
+```{r}
+#temp_lm_forecast_mean <- temp_lm_forecast %>% 
+  # mean daily forecasts at each site per ensemble
+  #group_by(datetime, site_id) |> 
+  #summarize(prediction = mean(prediction)) 
+  #pivot_wider(names_from = variable, values_from = prediction)
+
+for(i in 1:length(lake_sites$field_site_id)) {
+curr_wt <- my_lag_data %>%
+  filter(datetime == forecast_start_date) %>%
+  pull(fcast_wtemp)
+}
+```
+
+Setting up an empty dataframe that we will fill with our water temperature predictions. Here, the `mutate()` function is used to insert the current observed water temperature as the initial condition and set all future values of water temperature to NA, which will subsequently be replaced with forecasted values by our model.
+
+```{r}
+forecast_deterministic1 <- NULL
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+  #pull current water temperature data for all sites
+  mean_current_wtemp <-  temp_lm_forecast_allsites %>%
+    group_by(datetime, site_id) %>%
+    summarize(wtemp = mean(wtemp))
+  
+  curr_wt <- mean_current_wtemp %>%
+  filter(datetime == forecast_start_date & site_id == example_site) %>%
+  pull(wtemp)
+  
+  #store it in the forecast probabilistic table for all sites
+forecast_deterministic <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                                 parameter = rep(1:n_members, each = length(forecasted_dates)),
+                                 forecast_variable = "water_temperature",
+                                 site_id = example_site,
+                                 value = as.double(NA),
+                                 uc_type = "deterministic") %>%
+  mutate(value = ifelse(forecast_date == forecast_start_date, curr_wt, NA))
+
+forecast_deterministic1 <- dplyr::bind_rows(forecast_deterministic1, forecast_deterministic)
+}
+```
+
+Run forecast. Here, we loop through days into the future and generate predictions with our multiple regression model using yesterday's water temperature and today's air temperature. Note we use the `rows_update()` function to replace NAs with forecasted water temperature values each day. 
+
+```{r}
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+for(i in 2:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_deterministic1 %>%
+    filter(forecast_date == forecasted_dates[i])
+  
+  #pull driver data for the relevant date; here we select only 1 ensemble member from the NOAA air temperature forecast
+  temp_driv <- future_lake_temp %>%
+    filter(datetime == forecasted_dates[i] & parameter == 1)
+  
+  #pull lagged water temp values
+  temp_lag <- my_lag_data %>%
+    filter(forecast_date == forecasted_dates[i-1])
+  
+  #run model
+  temp_pred$value <- fit$coefficients[1] + temp_driv$air_temperature* fit$coefficients[2] + temp_driv$air_pressure * fit$coefficients[3]
+  
+  #insert values back into the forecast dataframe
+  forecast_deterministic1 <- forecast_deterministic1 %>%
+    rows_update(temp_pred, by = c("forecast_date","parameter","forecast_variable", "site_id", "uc_type"))
+}
+}
+```
+
+Build plot. This should resemble the plot in the R Shiny app Activity B Overview, labeled "Water Temperature Forecast"; here, we are plotting the "Both" model, which uses both yesterday's water temperature and today's forecasted air temperature to forecast water temperature
+
+```{r}
+past1 <- past_lake_temp %>%
+  filter(datetime <= "2024-02-10")
+```
+
+```{r}
+#temp_lm_f_mean <- temp_lm_forecast_mean %>%
+  #filter(datetime <= "2024-02-10")
+ggplot() +
+  geom_point(data = past_lake_temp, aes(x=datetime, y=past_wtemp))+
+    geom_line(data = forecast_deterministic1, aes(x = forecast_date, y = value, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id, scales = 'free')
+```
+
+Set number of ensemble members; notice we now use the entire NOAA forecast ensemble with 30 members.
+
+```{r}
+n_members <- 30 
+```
+
+
+Setting up an empty dataframe that we will fill with our water temperature predictions. Notice that this dataframe is much longer than the `forecast_deterministic` dataframe because we are now forecasting with 30 ensemble members.
+
+```{r}
+forecast_driver_unc1 <- NULL
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+  #pull current water temperature data for all sites
+  mean_current_wtemp <-  temp_lm_forecast_allsites %>%
+    group_by(datetime, site_id) %>%
+    summarize(wtemp = mean(wtemp))
+  
+  curr_wt <- mean_current_wtemp %>%
+  filter(datetime == forecast_start_date & site_id == example_site) %>%
+  pull(wtemp)
+forecast_driver_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                              parameter = rep(1:n_members, each = length(forecasted_dates)),
+                              forecast_variable = "water_temperature",
+                              site_id = example_site,
+                              value = as.double(NA),
+                              uc_type = "driver") %>%
+  mutate(value = ifelse(forecast_date == forecast_start_date, curr_wt, NA)) 
+forecast_driver_unc1 <- dplyr::bind_rows(forecast_driver_unc1, forecast_driver_unc)
+}
+```
+
+Run forecast. Notice that we now pull the entire driver ensemble of the NOAA forecast for each day instead of just ensemble member 1.
+
+```{r}
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+for(i in 2:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_driver_unc1 %>%
+    filter(forecast_date == forecasted_dates[i] & site_id == example_site)
+  
+  #pull driver ensemble for the relevant date; here we are using all 30 NOAA ensemble members
+  temp_driv <- future_lake_temp %>%
+    filter(datetime == forecasted_dates[i] & site_id == example_site & parameter >= 1)
+  
+  #pull lagged water temp values
+  temp_lag <- forecast_driver_unc1 %>%
+    filter(forecast_date == forecasted_dates[i-1])
+  
+  #run model
+   temp_pred$value <- fit$coefficients[1] + temp_driv$air_temperature* fit$coefficients[2] +     temp_driv$air_pressure * fit$coefficients[3]  
+   
+  #insert values back into the forecast dataframe
+  forecast_driver_unc1 <- forecast_driver_unc1 %>%
+    rows_update(temp_pred, by = c("forecast_date","parameter","forecast_variable", "site_id", "uc_type"))
+}
+}
+```
+
+Plot the forecast.
+```{r}
+ggplot() +
+    geom_point(data = temp_lm_past_predict, aes(x=datetime, y=wtemp))+
+    geom_line(data = forecast_driver_unc1, aes(x = forecast_date, y = value, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id)
+```
+#Parameter Uncertainty
+Use the `rnorm()` function and the information in the `coeffs` and `params_se` objects to generate parameter distributions for each of the parameters in the multiple regression model. 
+
+View standard errors of estimated model coefficients and save them for our forecasts later.
+
+```{r}
+params_se <- fit_summary$coefficients[,2]
+params_se
+
+```
+
+
+
+```{r}
+  
+param_df <- data.frame(beta1 = rnorm(30, fit$coefficients[1], params_se[1]),
+                       beta2 = rnorm(30, fit$coefficients[2], params_se[2]),
+                       beta3 = rnorm(30, fit$coefficients[3], params_se[3]))
+```
+
+Plot each of the parameter distributions you have created. 
+
+```{r}
+#plot_param_dist <- function(param_df)
+  # Set colors
+  #l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
+  
+  # Reshape data
+  plot.params <- pivot_longer(param_df, cols = starts_with("beta"), names_to = "variable", values_to = "value")
+  
+  # Build plot
+  ggplot(plot.params) +
+    geom_density(aes(value), fill = "orange", alpha = 0.5) +
+    facet_wrap(~variable, nrow = 1, scales = "free_x") +
+    theme_bw(base_size = 16)
+
+```
+
+Setting up an empty dataframe that we will fill with our water temperature predictions. 
+
+```{r}
+forecast_parameter_unc1 <- NULL
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+  #pull current water temperature data for all sites
+  mean_current_wtemp <-  temp_lm_forecast_allsites %>%
+    group_by(datetime, site_id) %>%
+    summarize(wtemp = mean(wtemp))
+  
+  curr_wt <- mean_current_wtemp %>%
+  filter(datetime == forecast_start_date & site_id == example_site) %>%
+  pull(wtemp)
+  
+forecast_parameter_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                                 parameter = rep(1:n_members, each = length(forecasted_dates)),
+                                 forecast_variable = "water_temperature",
+                                 site_id = example_site,
+                                 value = as.double(NA),
+                                 uc_type = "parameter") %>%
+  mutate(value = ifelse(forecast_date == forecast_start_date, curr_wt, NA)) 
+forecast_parameter_unc1 <- dplyr::bind_rows(forecast_parameter_unc1, forecast_parameter_unc)
+}
+```
+
+Run forecast. 
+
+**Notice** that we only pull a single member of the NOAA air temperature forecast so that we can focus on the contribution of parameter uncertainty alone to our forecast.
+
+**Notice** that parameter values are now pulled from our `param_df` distributions instead of the `coeffs` object, so our parameter values are now uncertain rather than fixed.
+
+```{r}
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+for(i in 2:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_parameter_unc1 %>%
+    filter(forecast_date == forecasted_dates[i] & parameter >=1)
+  
+  #pull driver data for the relevant date; here we select only 1 ensemble member from the NOAA air temperature forecast
+  temp_driv <- future_lake_temp %>%
+    filter(datetime == forecasted_dates[i] & parameter >=1)
+  
+  #pull lagged water temp values
+  temp_lag <- forecast_parameter_unc1 %>%
+    filter(forecast_date == forecasted_dates[i-1])
+  
+  #run model using parameter distributions instead of fixed values
+  temp_pred$value <- param_df$beta1 + temp_driv$air_temperature * param_df$beta2 + temp_driv$air_pressure * param_df$beta3
+ 
+  
+  #insert values back into the forecast dataframe
+  forecast_parameter_unc1 <- forecast_parameter_unc1 %>%
+    rows_update(temp_pred, by = c("forecast_date","parameter","forecast_variable", "site_id", "uc_type"))
+}
+}
+```
+
+Build plot - this should resemble the water temperature forecast plot in the R Shiny app, Activity B Objective 7 ("Both" model)
+
+```{r}
+
+ggplot() +
+    #geom_point(data = temp_lm_forecast_mean, aes(x = datetime, y = temperature, color = "Observed water temp.")) +
+    geom_line(data = forecast_parameter_unc1, aes(x = forecast_date, y = value, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id)
+```
+
+#Process Uncertainty
+Define the standard deviation of the process uncertainty distribution, `sigma` as the standard deviation of the residuals. This is the uncertainty left over after we found the best parameters for fitting the model. 
+
+```{r}
+sigma <- sd(residuals, na.rm = TRUE) # Process Uncertainty Noise Std Dev.; this is your sigma
+```
+
+Setting up an empty dataframe that we will fill with our water temperature predictions. 
+
+```{r}
+forecast_process_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                               parameter = rep(1:n_members, each = length(forecasted_dates)),
+                               forecast_variable = "water_temperature",
+                               value = as.double(NA),
+                               uc_type = "process") %>%
+  mutate(value = ifelse(forecast_date == forecast_start_date, curr_wt, NA)) 
+```
+
+Run forecast. 
+
+**Notice** that we only pull a single member of the NOAA air temperature forecast so that we can focus on the contribution of process uncertainty alone to our forecast.
+
+**Notice** that process uncertainty is defined using the `rnorm()` function with a standard deviation of `sigma`.
+
+```{r}
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+for(i in 2:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_process_unc %>%
+    filter(forecast_date == forecasted_dates[i])
+  
+  #pull driver data for the relevant date; here we select only 1 ensemble member from the NOAA air temperature forecast
+  temp_driv <- future_lake_temp %>%
+    filter(datetime == forecasted_dates[i] & parameter == 1 & site_id == example_site)
+  
+  #pull lagged water temp values
+  temp_lag <- forecast_process_unc %>%
+    filter(forecast_date == forecasted_dates[i-1])
+  
+  #run model with process uncertainty added 
+  temp_pred$value <- fit$coefficients[1] + temp_driv$air_temperature * fit$coefficients[2] + temp_driv$air_pressure * fit$coefficients[3] + rnorm(n = 30, mean = 0, sd = sigma)
+  
+  #insert values back into the forecast dataframe
+  forecast_process_unc <- forecast_process_unc %>%
+    rows_update(temp_pred, by = c("forecast_date","parameter","forecast_variable","uc_type"))
+}
+}
+```
+
+Build plot - this should resemble the water temperature forecast plot in the R Shiny app, Activity B Objective 6 ("Both" model)
+
+```{r}
+ggplot() +
+    geom_point(data = temp_lm_past_predict, aes(x = datetime, y = wtemp, color = "Observed water temp.")) +
+    geom_line(data = forecast_process_unc, aes(x = forecast_date, y = value, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id)
+```
+
+To account for initial condition uncertainty we can generate a distribution around the initial condition and then run our model with slightly different initial conditions.
+
+Generate a distribution of initial conditions for your forecast using the current water temperature (`curr_wt`) and a standard deviation of 0.1 degrees Celsius (`ic_sd`).
+
+```{r}
+ic_uc1 <- NULL
+ic_sd <- 0.1
+for(i in 1:length(lake_sites$field_site_id)) {
+  example_site <- lake_sites$field_site_id[i]
+  
+  curr_wt <- mean_current_wtemp %>%
+  filter(datetime == forecast_start_date & site_id == example_site) %>%
+  pull(wtemp)
+  
+ic_uc <- rnorm(n = n_members, mean = curr_wt, sd = ic_sd)
+ic_uc1 <- append(ic_uc1, ic_uc)
+}
+
+```
+
+Plot the distribution around your initial condition. This should resemble the initial condition distribution plot in the R Shiny app, Activity B Objective 8 ("Atemp" model).
+
+```{r}
+#Build plot
+  ggplot() +
+    geom_vline(xintercept = curr_wt) +
+    geom_density(aes(ic_uc1), fill = "green", alpha = 0.3) +
+    xlab("Temperature (\u00B0C)") +
+    ylab("Density") +
+    theme_bw(base_size = 18)+
+    ggtitle("Initial condition distribution")
+```
+
+Create dataframe with the distribution of initial conditions.
+
+```{r}
+ic_df1 <- NULL
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+
+  for(i in 1:length(forecasted_dates)) {
+  ic_uc <- rnorm(n = n_members, mean = curr_wt, sd = ic_sd)
+ic_df <- tibble(forecast_date = rep(as.Date(forecasted_dates[i]), times = n_members),
+                parameter = c(1:n_members),
+                site_id = example_site,
+                forecast_variable = "water_temperature",
+                value = ic_uc,
+                uc_type = "initial_conditions")
+ic_df1 <- dplyr::bind_rows(ic_df1, ic_df)
+
+}
+}
+```
+
+Setting up an empty dataframe that we will fill with our water temperature predictions. **Note** the use of the `rows_update()` function to populate the starting date of the forecast with values from our initial conditions distribution.
+
+```{r}
+forecast_ic_unc1 <- NULL
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+forecast_ic_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                          parameter = rep(1:n_members, each = length(forecasted_dates)),
+                          forecast_variable = "water_temperature",
+                          value = as.double(NA),
+                          site_id = example_site,
+                          uc_type = "initial_conditions") %>%
+  rows_update(ic_df1, by = c("forecast_date","parameter","forecast_variable", "site_id",
+                            "uc_type"), unmatched = "ignore") 
+
+forecast_ic_unc1 <- dplyr::bind_rows(forecast_ic_unc1, forecast_ic_unc)
+  }
+```
+
+Run forecast. 
+
+```{r}
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+
+for(i in 1:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for relevant date
+  temp_pred <- ic_df1 %>%
+    filter(forecast_date == forecasted_dates[i] & parameter == 1 & site_id == example_site)
+  
+  #pull driver data for the relevant date; here we select only 1 ensemble member from the NOAA air temperature forecast
+  temp_driv <- future_lake_temp %>%
+    filter(datetime == forecasted_dates[i] & parameter == 1 & site_id == example_site)
+  
+  #pull lagged water temp values
+  temp_lag <- ic_df1 %>%
+    filter(forecast_date == forecasted_dates[i])
+  
+  #run model using initial conditions distribution instead of a fixed value
+  temp_pred$value <- fit$coefficients[1] + temp_driv$air_temperature * fit$coefficients[2] + temp_driv$air_pressure * fit$coefficients[3]
+  
+  #insert values back into the forecast dataframe
+  forecast_ic_unc1 <- forecast_ic_unc1 %>%
+    rows_update(temp_pred, by = c("forecast_date","parameter","forecast_variable", "site_id", "uc_type"))
+}
+}
+```
+
+Replace NAs in one dataset by values from another dataset
+```{r}
+forecast_ic_unc2 <- left_join(forecast_ic_unc1, ic_df1, by = c("forecast_date", "site_id", "parameter", "forecast_variable", "uc_type")) %>% 
+    mutate(value = ifelse(is.na(value.x), value.y, value.x)) %>% 
+    select(forecast_date, site_id, value, parameter, forecast_variable, uc_type)
+```
+
+
+Build plot - this should resemble the water temperature forecast plot in the R Shiny app, Activity B Objective 8 ("Both" model)
+
+```{r}
+ggplot() +
+    geom_point(data = temp_lm_past_predict, aes(x = datetime, y = wtemp, color = "Observed water temp.")) +
+    geom_line(data = forecast_ic_unc2, aes(x = forecast_date, y = value, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id)
+```
+
+# Activity C:
+## Objective 9. Generate a forecast incorporating all sources of uncertainty
+
+To plot a forecast with all sources of uncertainty incorporated, we need to generate a forecast that incorporates driver, parameter, process, and initial conditions uncertainty.
+
+Below, we will adjust the forecasting for-loop to incorporate all four sources of uncertainty (driver, parameter, process, initial conditions) into your forecasts. The forecast ensemble will have 30 members.  
+
+Setting up an empty dataframe that we will fill with our water temperature predictions. **Note** the use of the `rows_update()` function to populate the starting date of the forecast with values from our initial conditions distribution.
+
+```{r}
+forecast_total_unc1 <- NULL
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+forecast_total_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                             parameter = rep(1:n_members, each = length(forecasted_dates)),
+                             forecast_variable = "water_temperature",
+                             site_id = example_site,
+                             value = as.double(NA),
+                             uc_type = "total") %>%
+  rows_update(ic_df1, by = c("forecast_date","parameter","forecast_variable", "site_id"), unmatched = "ignore") 
+forecast_total_unc1 <- dplyr::bind_rows(forecast_total_unc1, forecast_total_unc)
+}
+```
+
+Run forecast. **Note** that we use all 30 NOAA air temperature forecast ensemble members, use a distribution of parameter values rather than fixed values, and have added process uncertainty to each iteration of our forecast.
+
+```{r}
+
+for(i in 1:length(lake_sites$field_site_id)) {
+  
+  example_site <- lake_sites$field_site_id[i]
+  
+for(i in 2:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for relevant date
+  temp_pred <- forecast_total_unc1 %>%
+    filter(forecast_date == forecasted_dates[i])
+  
+  #pull driver ensemble for the relevant date; here we are using all 30 NOAA ensemble members
+  temp_driv <- future_lake_temp %>%
+    filter(datetime == forecasted_dates[i] & parameter >=1)
+  
+  #pull lagged water temp values
+  temp_lag <- forecast_total_unc1 %>%
+    filter(forecast_date == forecasted_dates[i-1])
+  
+  #Equalize number of rows in dataframe
+  param_df1 <- param_df[-c(31:210), ] 
+  
+  #run model using initial conditions and parameter distributions instead of fixed values, and adding process uncertainty
+  temp_pred$value <- param_df1$beta1 + temp_driv$air_temperature * param_df1$beta2 + temp_driv$air_pressure * param_df1$beta3 + rnorm(n = 30, mean = 0, sd = sigma) 
+  
+  #insert values back into the forecast dataframe
+  forecast_total_unc1 <- forecast_total_unc1 %>%
+    rows_update(temp_pred, by = c("forecast_date","parameter", "site_id", "uc_type"))
+}
+}
+```
+
+
+Build plot - this should resemble the water temperature forecast plot in the R Shiny app, Activity C Objective 10 ("Both" model)
+
+```{r}
+ggplot() +
+    geom_point(data = temp_lm_past_predict, aes(x = datetime, y = wtemp, color = "Observed water temp.")) +
+    geom_line(data = forecast_total_unc1, aes(x = forecast_date, y = value, color = "Forecasted water temp.", group = parameter)) +
+    geom_vline(xintercept = as_date(forecast_start_date), linetype = "dashed") +
+    ylab("Temperature (\u00B0C)")+
+  facet_wrap(~site_id)
+```
+
+## Objective 10. Partition uncertainty 
+
+Now, we will partition the relative contributions of each source of uncertainty to total forecast uncertainty.
+
+Combine the forecasts with a single source of uncertainty into one dataframe.
+```{r}
+all_forecast_df <- bind_rows(forecast_driver_unc1, forecast_parameter_unc1) %>%
+  bind_rows(., forecast_process_unc) %>%
+  bind_rows(., forecast_ic_unc)
+```
+
+Group the dataframe by date and the type of uncertainty included in the forecast, then calculate the standard deviation across all 30 ensemble members for each date and uncertainty type.
+
+```{r}
+sd_df <- all_forecast_df %>%
+  group_by(forecast_date, uc_type) %>%
+  summarize(sd = sd(value, na.rm = TRUE), .groups = "drop")
+```
+
+Plot the contribution of each source of uncertainty to total forecast uncertainty. This should resemble the uncertainty quantification plot in the R Shiny app, Activity C, Objective 10 ("Atemp" model). 
+
+```{r}
+  ggplot() +
+    geom_bar(data = sd_df, aes(x = forecast_date, y = sd, fill = uc_type), stat = "identity", position = "stack") +
+    ylab("Standard Deviation (\u00B0C)") +
+    xlab("Forecasted date") +
+    scale_fill_manual(values = c("process" = "red", "parameter" = "black", "initial_conditions" = "orange","driver" = "green")) +
+    scale_x_date(date_breaks = "1 day", date_labels = "%b %d") +
+    labs(fill = "Uncertainty") +
+    theme_bw(base_size = 12)
 ```
 
 ## Convert to EFI standard for submission
@@ -429,7 +1249,7 @@ Is the linear model a reasonable relationship between air temperature and water 
 
 ```{r, echo=F, warning=F}
 library(ggpmisc)
-ggplot(targets_lm, aes(x=air_temperature, y= temperature, colour = site_id)) +
+ggplot(model_df, aes(x=air_temperature, y= temperature, colour = site_id)) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = 'lm') +
   stat_poly_eq(label.y = 0.8) +
