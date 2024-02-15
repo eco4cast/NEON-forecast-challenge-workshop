@@ -1,6 +1,6 @@
 ---
-title: "NEON forecast challenge - aquatics"
-author: Freya Olsson
+title: "NEON_first_forecast_challenge_modified - aquatics"
+author: Bibek Kandel
 output:
   md_document: 
     variant: markdown_github
@@ -171,7 +171,7 @@ Note: This code chunk can take a few minutes to execute as it accesses the NOAA 
 # past stacked weather
 noaa_past_s3 <- neon4cast::noaa_stage3()
 
-variables <- c("air_temperature")
+variables <- c("air_temperature", "air_pressure")
 #Other variable names can be found at https://projects.ecoforecast.org/neon4cast-docs/Shared-Forecast-Drivers.html#stage-3
 
 noaa_past <- noaa_past_s3  |> 
@@ -207,7 +207,7 @@ forecast_date <- Sys.Date()
 noaa_date <- forecast_date - days(1)
 
 noaa_future_s3 <- neon4cast::noaa_stage2(start_date = as.character(noaa_date))
-variables <- c("air_temperature")
+variables <- c("air_temperature", "air_pressure")
 
 noaa_future <- noaa_future_s3 |> 
   dplyr::filter(datetime >= forecast_date,
@@ -228,7 +228,7 @@ noaa_future_daily <- noaa_future |>
   pivot_wider(names_from = variable, values_from = prediction) |>
   # convert to Celsius
   mutate(air_temperature = air_temperature - 273.15) |> 
-  select(datetime, site_id, air_temperature, parameter)
+  select(datetime, site_id, air_temperature, air_pressure, parameter)
 
 noaa_future_daily
 ```
@@ -241,6 +241,13 @@ ggplot(noaa_future_daily, aes(x=datetime, y=air_temperature)) +
   facet_wrap(~site_id, scales = 'free')
 
 ggplot(noaa_future_daily, aes(x=datetime, y=air_temperature)) +
+  geom_line(aes(group = parameter), alpha = 0.4)+
+  geom_line(data = noaa_past_mean, colour = 'darkblue') +
+  coord_cartesian(xlim = c(noaa_date - days(60),
+                           noaa_date + days(35)))+
+  facet_wrap(~site_id, scales = 'free')
+
+ggplot(noaa_future_daily, aes(x=datetime, y=air_pressure)) +
   geom_line(aes(group = parameter), alpha = 0.4)+
   geom_line(data = noaa_past_mean, colour = 'darkblue') +
   coord_cartesian(xlim = c(noaa_date - days(60),
@@ -266,6 +273,228 @@ targets_lm[1000:1010,]
 
 
 To fit the linear model we use the base R `lm()` but there are also methods to fit linear (and non-linear) models in the `fable::` package. You can explore the [documentation](https://otexts.com/fpp3/regression.html) for more information on the `fable::TSLM()` function. We can fit a separate linear model for each site. For example, at Lake Suggs, this would look like:
+
+```{r}
+#Set ensemble members constant for all the sites
+n_members <- 31
+temp_driver_forecast <- NULL
+temp_parameter_forecast <- NULL
+temp_process_forecast <- NULL
+temp_total_forecast <- NULL
+#Set forecast horizon
+forecast_horizon <- 7
+forecasted_dates <- seq(from = ymd(forecast_date), to = ymd(forecast_date) + forecast_horizon, by = "day")
+
+for(i in 1:length(lake_sites$field_site_id)) {  
+  
+  example_site <- lake_sites$field_site_id[i]
+#Create empty dataframes for driver, parameter and process uncertainty to fill up later
+forecast_driver_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                              ensemble_member = rep(1:n_members, each = length(forecasted_dates)),
+                              forecast_variable = "water_temperature",
+                              site_id = example_site,
+                              value = as.double(NA),
+                              uc_type = "driver")
+
+forecast_parameter_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                                 ensemble_member = rep(1:n_members, each = length(forecasted_dates)),
+                                 forecast_variable = "water_temperature",
+                                 site_id = example_site,
+                                 value = as.double(NA),
+                                 uc_type = "parameter")
+
+forecast_process_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                               ensemble_member = rep(1:n_members, each = length(forecasted_dates)),
+                               forecast_variable = "water_temperature",
+                               site_id = example_site,
+                               value = as.double(NA),
+                               uc_type = "process")
+
+#Create an empty dataframe to assemble total forecast uncertainties
+forecast_total_unc <- tibble(forecast_date = rep(forecasted_dates, times = n_members),
+                             ensemble_member = rep(1:n_members, each = length(forecasted_dates)),
+                             forecast_variable = "water_temperature",
+                             site_id = example_site,
+                             value = as.double(NA),
+                             uc_type = "total")
+
+#Create everything needed for chosen site to use inside date loop
+
+  #Modeling section
+  #Start off by fitting a linear model
+linear_fit <- lm(targets_lm$temperature ~ targets_lm$air_temperature + targets_lm$air_pressure)
+fit_summary <- summary(linear_fit)
+  #Store coefficients and parameters
+coeffs <- round(linear_fit$coefficients, 2)
+params_se <- fit_summary$coefficients[,2]
+  #Calculate model predictions using above model
+mod <- predict(linear_fit, data = targets_lm)
+  #Create distribution table to use for parameter uncertainty later
+param_df <- data.frame(beta1 = rnorm(n_members, coeffs[1], params_se[1]),
+                       beta2 = rnorm(n_members, coeffs[2], params_se[2]),
+                       beta3 = rnorm(n_members, coeffs[3], params_se[3]))
+#Calculate model assessment matrices
+r2 <- round(fit_summary$r.squared, 2) 
+residuals <- mod - targets_lm$temperature
+err <- mean(residuals, na.rm = TRUE) 
+rmse <- round(sqrt(mean((mod - targets_lm$temperature)^2, na.rm = TRUE)), 2)
+#Create sigma distribution to use for process uncertainty later
+sigma <- sd(residuals, na.rm = TRUE)
+
+#Forecasting section for driver uncertainty
+for(j in 1:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_driver_unc %>%
+    filter(forecast_date == forecasted_dates[j])
+  
+  #pull driver ensemble for the relevant date; here we are using all 30 NOAA ensemble members
+  temp_driv <- noaa_future_daily %>%
+    filter(datetime == forecasted_dates[j] & site_id == example_site)
+  na.omit(temp_driv)
+  #pull lagged water temp values
+  #temp_lag <- forecast_driver_unc %>%
+    #filter(forecast_date == forecasted_dates[j-1])
+  
+  #run model
+  temp_pred$value <- coeffs[1] + temp_driv$air_temperature * coeffs[2] + temp_driv$air_pressure * coeffs[3] 
+  
+  #insert values back into the forecast dataframe
+  forecast_driver_unc <- forecast_driver_unc %>%
+    rows_update(temp_pred, by = c("forecast_date","ensemble_member","forecast_variable","site_id","uc_type"))
+}
+
+#Forecasting section for parameter uncertainty
+for(k in 1:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_parameter_unc %>%
+    filter(forecast_date == forecasted_dates[k])
+  
+  #pull driver data for the relevant date; here we select only 1 ensemble member from the NOAA air temperature forecast
+  temp_driv <- noaa_future_daily %>%
+    filter(datetime == forecasted_dates[k] & site_id == example_site & parameter == 1)
+  na.omit(temp_driv)
+  #pull lagged water temp values
+  #temp_lag <- forecast_parameter_unc %>%
+   # filter(forecast_date == forecasted_dates[k-1])
+  
+  #run model using parameter distributions instead of fixed values
+  temp_pred$value <- param_df$beta1 + temp_driv$air_temperature * param_df$beta2 + temp_driv$air_pressure * param_df$beta3
+  
+  #insert values back into the forecast dataframe
+  forecast_parameter_unc <- forecast_parameter_unc %>%
+    rows_update(temp_pred, by = c("forecast_date","ensemble_member","forecast_variable","site_id","uc_type"))
+}
+
+##Forecasting section for process uncertainty
+for(l in 1:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for the relevant date
+  temp_pred <- forecast_process_unc %>%
+    filter(forecast_date == forecasted_dates[l])
+  
+  #pull driver data for the relevant date; here we select only 1 ensemble member from the NOAA air temperature forecast
+  temp_driv <- noaa_future_daily %>%
+    filter(datetime == forecasted_dates[l] & parameter == 1 & site_id == example_site)
+  na.omit(temp_driv)
+  #pull lagged water temp values
+  #temp_lag <- forecast_process_unc %>%
+    #filter(forecast_date == forecasted_dates[l-1])
+  
+  #run model with process uncertainty added 
+  temp_pred$value <- coeffs[1] + temp_driv$air_temperature * coeffs[2] + temp_driv$air_pressure * coeffs[3] + rnorm(n = n_members, mean = 0, sd = sigma)
+  
+  #insert values back into the forecast dataframe
+  forecast_process_unc <- forecast_process_unc %>%
+    rows_update(temp_pred, by = c("forecast_date","ensemble_member","forecast_variable","site_id","uc_type"))
+}
+  
+  #Forecasting section for total forecast uncertainty
+  for(m in 1:length(forecasted_dates)) {
+  
+  #pull prediction dataframe for relevant date
+  temp_pred <- forecast_total_unc %>%
+    filter(forecast_date == forecasted_dates[m])
+  
+  #pull driver ensemble for the relevant date; here we are using all 30 NOAA ensemble members
+  temp_driv <- noaa_future_daily %>%
+    filter(datetime == forecasted_dates[m] & site_id == example_site)
+  
+  #pull lagged water temp values
+  #temp_lag <- forecast_total_unc %>%
+    #filter(forecast_date == forecasted_dates[m-1])
+  
+  #run model using initial conditions and parameter distributions instead of fixed values, and adding process uncertainty
+  temp_pred$value <- param_df$beta1 + temp_driv$air_temperature * param_df$beta2 + temp_driv$air_pressure * param_df$beta3 + rnorm(n = n_members, mean = 0, sd = sigma) 
+  
+  #insert values back into the forecast dataframe
+  forecast_total_unc <- forecast_total_unc %>%
+    rows_update(temp_pred, by = c("forecast_date","ensemble_member","forecast_variable", "site_id", "uc_type"))
+}
+temp_driver_forecast <- dplyr::bind_rows(temp_driver_forecast, forecast_driver_unc)
+temp_parameter_forecast <- dplyr::bind_rows(temp_parameter_forecast, forecast_parameter_unc)
+temp_process_forecast <- dplyr::bind_rows(temp_process_forecast, forecast_process_unc)
+temp_total_forecast <- dplyr::bind_rows(temp_total_forecast, forecast_total_unc)
+}
+```
+
+Let's visualize the time series of all different uncertainties for all the sites.
+```{r}
+#Plot the forecasted water temperature for all different uncertainties
+ggplot()+
+  geom_line(data = temp_driver_forecast, aes(x=forecast_date, y=value, group = ensemble_member, alpha = 0.4)) +
+  geom_vline(xintercept = as_date(forecast_date), linetype = "dashed") +
+  labs(title = "Driver uncertainty in water temperature forecast for different NEON sites")+
+  ylab("water temperature")+
+  facet_wrap(~site_id, scales = 'free')
+
+ggplot()+
+  geom_line(data = temp_parameter_forecast, aes(x=forecast_date, y=value, group = ensemble_member, alpha = 0.4)) +
+  geom_vline(xintercept = as_date(forecast_date), linetype = "dashed") +
+  labs(title = "Parameter uncertainty in water temperature forecast for different NEON sites")+
+  ylab("water temperature")+
+  facet_wrap(~site_id, scales = 'free')
+
+ggplot()+
+  geom_line(data = temp_process_forecast, aes(x=forecast_date, y=value, group = ensemble_member, alpha = 0.4)) +
+  geom_vline(xintercept = as_date(forecast_date), linetype = "dashed") +
+  labs(title = "Process uncertainty in water temperature forecast for different NEON sites")+
+  ylab("water temperature")+
+  facet_wrap(~site_id, scales = 'free')
+
+ggplot()+
+  geom_line(data = temp_total_forecast, aes(x=forecast_date, y=value, group = ensemble_member, alpha = 0.4)) +
+  geom_vline(xintercept = as_date(forecast_date), linetype = "dashed") +
+  labs(title = "Total uncertainty in water temperature forecast for different NEON sites")+
+  ylab("water temperature")+
+  facet_wrap(~site_id, scales = 'free')
+```
+
+#Partition Total Forecast Uncertainty
+
+```{r}
+#Combine all uncertainties into a single dataframe
+all_forecast_df <- bind_rows(temp_driver_forecast, temp_parameter_forecast) %>%
+  bind_rows(., temp_process_forecast)
+
+#Group the dataframe by date and the type of uncertainty included in the forecast, then calculate the standard deviation across all 30 ensemble members for each date and uncertainty type.
+sd_df <- all_forecast_df %>%
+  group_by(forecast_date, uc_type) %>%
+  summarize(sd = sd(value, na.rm = TRUE), .groups = "drop")
+```
+
+Plot the contribution of each type of uncertainties to total forecast uncertainty.
+```{r}
+ggplot() +
+    geom_bar(data = sd_df, aes(x = forecast_date, y = sd, fill = uc_type), stat = "identity", position = "stack") +
+    ylab("Standard Deviation (\u00B0C)") +
+    xlab("Forecasted date") +
+    scale_fill_manual(values = c("process" = "orange", "parameter" = "black", "initial_conditions" = "blue","driver" = "purple")) +
+    scale_x_date(date_breaks = "1 day", date_labels = "%b %d") +
+    labs(fill = "Uncertainty") +
+    theme_bw(base_size = 12)
+```
 
 ```{r, eval = F}
 example_site <- 'SUGG'
