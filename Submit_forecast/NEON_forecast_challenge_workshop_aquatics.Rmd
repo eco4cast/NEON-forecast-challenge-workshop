@@ -616,7 +616,6 @@ These include functions for submitting, scoring and reading forecasts:
 
 * `submit()` - submit the forecast file to the neon4cast server where it will be scored
 * `forecast_output_validator()` - will check the file is in the correct format to be submitted
-* `check_submission()` - check that your submission has been uploaded to the server
 
 The file name needs to be in the format theme-reference_datetime-model_id
 ```{r eval = T}
@@ -1163,7 +1162,7 @@ EFI has also produced a package that summarizes the proposed community standards
 You can look at what other variables are available in the NOAA weather data. There's information in the [Challenge documentation](https://projects.ecoforecast.org/neon4cast-docs/Shared-Forecast-Drivers.html) too.
 
 ```{r}
-df_past %>%
+noaa_past_s3 %>%
   filter(site_id == 'ARIK',
          datetime > ymd('2022-01-01')) |> 
   dplyr::collect() |> 

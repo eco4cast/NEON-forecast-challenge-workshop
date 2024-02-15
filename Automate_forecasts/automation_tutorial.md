@@ -1,19 +1,11 @@
--   <a href="#introduction" id="toc-introduction">1 Introduction</a>
--   <a href="#the-environment---docker" id="toc-the-environment---docker">2
-    The environment - Docker</a>
--   <a href="#the-platform---github-actions"
-    id="toc-the-platform---github-actions">3 The platform - Github
-    Actions</a>
--   <a href="#lets-try-and-put-this-together"
-    id="toc-lets-try-and-put-this-together">4 Let’s try and put this
-    together</a>
-    -   <a href="#writing-your-forecast-script"
-        id="toc-writing-your-forecast-script">4.1 Writing your forecast
-        script</a>
-    -   <a href="#writing-a-yaml" id="toc-writing-a-yaml">4.2 Writing a yaml</a>
-    -   <a href="#enable-actions" id="toc-enable-actions">4.3 Enable Actions</a>
-    -   <a href="#test-the-action" id="toc-test-the-action">4.4 Test the
-        Action</a>
+-   [1 Introduction](#introduction)
+-   [2 The environment - Docker](#the-environment---docker)
+-   [3 The platform - Github Actions](#the-platform---github-actions)
+-   [4 Let’s try and put this together](#lets-try-and-put-this-together)
+    -   [4.1 Writing your forecast code](#writing-your-forecast-code)
+    -   [4.2 Writing a yaml](#writing-a-yaml)
+    -   [4.3 Enable Actions](#enable-actions)
+    -   [4.4 Test the Action](#test-the-action)
 
 # 1 Introduction
 
@@ -73,25 +65,28 @@ A basic description of a Github action:
     schedule based on timing codes found in <https://crontab.guru>.
 -   `jobs` this is what you are telling the machine to do. You can see
     that within the job we have other instructions that tell the machine
-    what `container` to use and the various `steps` in the job. We use a
-    container `image` from eco4cast that has the neon4cast package plus
-    others installed (`eco4cast/rocker-neon4cast`).
-    -   The first is to `checkout repo` which uses a pre-made action
-        `checkout` to get a copy of the Github repo.
-    -   Next, within the container, we run the R script
-        `run_forecast.R` - this is your forecast code that generates a
-        forecast file and has code to submit the saved forecast to the
-        Challenge.
-
-Note: (An example forecast script is included in the repository but you
-can modify this with the code you develop during the workshop)
+    what `container` to use, some environmental variables (Github
+    credentials), and the various `steps` in the job. We use a container
+    `image` from eco4cast that has the neon4cast package plus others
+    installed (`eco4cast/rocker-neon4cast`).
+    -   The first step is to `checkout repo` which uses a pre-made
+        action `checkout` to get a copy of the Github repo.
+    -   Next, within the container, we knit the R markdown
+        `forecast_code_template.Rmd` from the Submit_forecast tutorial -
+        this is your forecast code that generates a forecast file and
+        has code to submit the saved forecast to the Challenge.
+    -   Finally, `commit` and `push` the html back to your github repo
+        (using the save Github credentials that are stored as a secret).
+        Without this step when a container closes all data created (your
+        forecast file and the html) would be lost.
 
 Note: the indentation matters, make sure the indentation is as formatted
 here!
 
-Because of the workflow_dispatch this will run everyday, submitting your
-forecast to the Challenge. As long as your run_forecast.R has all the
-code in to do this!
+Because this is a scheduled workflow this will run everyday, submitting
+your forecast to the Challenge and rendering your html with the new
+forecast. As long as your forecast_code_template.Rmd has all the code in
+to do this!
 
     on:
       workflow_dispatch:
@@ -101,52 +96,61 @@ code in to do this!
     jobs:
       run_forecast:
         runs-on: ubuntu-latest
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         container:
           image: eco4cast/rocker-neon4cast
         steps:
+          - run: git config --system --add safe.directory '*'
+          
           - name: Checkout repo
             uses: actions/checkout@v2
             with:
               fetch-depth: 0
               
           - name: Run automatic prediction file
-            run: Rscript forecast_code.R 
-
-Once all the instructions/steps are run the container will close. When a
-container closes all data created (like the
-“aquatics-2023-07-22-example_ID.csv” file) will be lost. If you need to
-retrieve anything from an automated Github Action it needs to be pushed
-back to Github or to a remote location (e.g. cloud storage).
-
-This workflow file should be saved into a sub-directory called
-`.github/workflows` in the parent directory.
+            run: Rscript -e 'rmarkdown::render(input = "Submit_forecast/forecast_code_template.Rmd")'
+            
+          - name: commit + push output
+            run: |
+              git config user.name github-actions
+              git config user.email github-actions@github.com
+              git pull
+              git add Submit_forecast/forecast_code_template.html
+              git commit -m "New forecast generated" || echo "No changes to commit"
+              git push https://${GITHUB_PAT}:${GITHUB_PAT}@github.com/${GITHUB_REPOSITORY} 
 
 # 4 Let’s try and put this together
 
-## 4.1 Writing your forecast script
+## 4.1 Writing your forecast code
 
-First we need a script that the action will run on. In the YAML above
-the action will run the command `Rscript forecast_code.R`. Create a file
-in the top directory of you repository called `forecast_code.R` that
-contains all the information needed to generate your forecast and submit
-it to the Challenge (read targets, fit model, generate forecast, submit
-etc.).
+Make sure that the `forecast_code_template.Rmd` in the Submit_forecast
+directory contains all the code needed to generate your forecast and
+submit it to the Challenge (read targets, fit model, generate forecast,
+submit etc.).
+
+Note: if you move this file or want to use a script that is stored
+elsewhere in the repository make sure you change the paths in the yaml.
 
 ## 4.2 Writing a yaml
 
 Next we need a YAML file that will be run by the Github action:
 
+1.  Make directory
+
 ``` r
-# 1. Make directory
 parent_dir <- here::here()
-dir.create(file.path(parent_dir,'.github/workflows'), recursive = T)
-
-# 2. Create yaml file
-# Copy chunk above into new text file (make sure the indentation is the same) and save into the .github/workflows directory with the yaml extension
-# run.forecast.yaml
-
-# 3. Commit changes and push to Github
+dir.create(file.path(parent_dir,'.github/workflows'), recursive = T, showWarnings = F)
 ```
+
+1.  Create yaml file Open a new text file either in R or another text
+    editor and copy and paste the above code in, ensuring the
+    indentation is correct. Save the file into a sub-directory called
+    `.github/workflows` in the parent directory
+    (`NEON-forecast-challenge-workshop/.github/workflows/run_forecast.yaml`)
+    ensuring that the file extension is `.yaml`.
+
+2.  Commit changes and push to Github
 
 ## 4.3 Enable Actions
 
