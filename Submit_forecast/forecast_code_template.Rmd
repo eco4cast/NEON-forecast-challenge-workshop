@@ -182,7 +182,7 @@ neon4cast::forecast_output_validator(file.path('Forecasts',forecast_file_1))
 
 Change eval = TRUE if you want to submit
 
-```{r submit-forecast, eval= FALSE)}
+```{r submit-forecast)}
 
 neon4cast::submit(forecast_file = file.path('Forecasts', forecast_file_1), ask = FALSE) # if ask = T (default), it will produce a pop-up box asking if you want to submit
 
