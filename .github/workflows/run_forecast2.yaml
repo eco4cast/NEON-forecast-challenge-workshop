@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
           
       - name: Run automatic prediction file
-        run: Rscript -e 'rmarkdown::render(input = "NEON-forecast-challenge-workshop/NEON_first_forecast_revised.Rmd")'
+        run: Rscript -e 'rmarkdown::render(input = "forecast_action_workflows/NEON_first_forecast_revised.Rmd")'
         
       - name: commit + push output
         run: |
