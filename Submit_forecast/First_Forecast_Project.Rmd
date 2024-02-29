@@ -14,13 +14,16 @@ install.packages('tidymodels')
 install.packages('readr') # package for applying simple forecasting methods
 install.packages('lubridate') # package for dealing with time series data sets and tsibble objects
 install.packages('tidyverse') # collection of R packages for data manipulation, analysis, and visualisation
-install.packages('dplyr') # working with dates and times
+install.packages('dplyr')# working with dates and times
+install.packages('ranger')
+install.packages('randomForest')
 remotes::install_github('eco4cast/neon4cast') # package from NEON4cast challenge organisers to assist with forecast building and submission
 ```
 
 #Initialize the libraries
 ```{r}
 library(tidymodels)
+library(tidyverse)
 library(readr)
 library(lubridate)
 library(dplyr)
