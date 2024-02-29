@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r eval = F}
+```{r eval = T}
 install.packages('tidymodels')
 install.packages('readr') # package for applying simple forecasting methods
 install.packages('lubridate') # package for dealing with time series data sets and tsibble objects
