@@ -35,7 +35,7 @@ set.seed(100) #for random number generation
 
 #Create historical met dataframe to include lag
 ```{r}
-noaa_forecast_start <- Sys.Date() - days(1)
+noaa_forecast_start <- Sys.Date() - days(2)
 min_historical_day <- Sys.Date() - days(60)
 variables <- c("air_temperature", "northward_wind", "eastward_wind", "surface_downwelling_shortwave_flux_in_air")
 sites <- c("BARC", "SUGG", "CRAM", "LIRO", "TOOK", "PRPO", "PRLA")
