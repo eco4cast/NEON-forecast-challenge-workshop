@@ -1,0 +1,470 @@
+---
+title: "First_Forecast_Project"
+author: "Bibek Kandel"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidymodels)
+library(readr)
+library(lubridate)
+library(dplyr)
+library(ranger)
+library(randomForest)
+tidymodels_prefer()
+set.seed(100) #for random number generation
+```
+
+#Create historical met dataframe to include lag
+```{r}
+noaa_forecast_start <- Sys.Date() - days(1)
+min_historical_day <- Sys.Date() - days(60)
+variables <- c("air_temperature", "northward_wind", "eastward_wind", "surface_downwelling_shortwave_flux_in_air")
+sites <- c("BARC", "SUGG", "CRAM", "LIRO", "TOOK", "PRPO", "PRLA")
+
+noaa_past_mean <-  neon4cast::noaa_stage3() |> 
+  filter(site_id %in% sites,
+                variable %in% variables,
+                datetime > min_historical_day,
+                datetime < noaa_forecast_start) |> 
+  collect() |> 
+  dplyr::mutate(datetime = as_date(datetime)) |> 
+  dplyr::summarize(prediction = mean(prediction), .by = c("datetime", "site_id", "parameter", "variable")) |> 
+  pivot_wider(names_from = variable, values_from = prediction) |> 
+  dplyr::mutate(air_temperature = air_temperature - 273.15)
+
+noaa_future_mean <- neon4cast::noaa_stage2(start_date = noaa_forecast_start) |> 
+  filter(datetime >= noaa_forecast_start,
+                site_id %in% sites,
+                variable %in% variables) |> 
+  collect() |> 
+  dplyr::mutate(datetime = as_date(datetime)) |> 
+  dplyr::summarize(prediction = mean(prediction), .by = c("datetime", "site_id", "parameter", "variable")) |>
+  pivot_wider(names_from = variable, values_from = prediction) |>
+  dplyr::mutate(air_temperature = air_temperature - 273.15) |> 
+  select(datetime, site_id, air_temperature,northward_wind,eastward_wind,surface_downwelling_shortwave_flux_in_air, parameter)
+
+combined_met_df <- bind_rows(noaa_past_mean, noaa_future_mean)
+combined_met_df <- combined_met_df |> 
+  dplyr::mutate(doy = yday(datetime))
+```
+
+#Plot the historical ensemble air temperature data for all sites
+```{r}
+ggplot(combined_met_df, aes(x = datetime, y = air_temperature, group = parameter)) +
+  geom_line() + 
+  geom_vline(aes(xintercept = Sys.Date()), color = "blue")+
+  facet_wrap(~site_id)
+
+ggplot(combined_met_df, aes(x = datetime, y = northward_wind, group = parameter)) +
+  geom_line() + 
+  geom_vline(aes(xintercept = Sys.Date()), color = "blue")+
+  facet_wrap(~site_id)
+
+ggplot(combined_met_df, aes(x = datetime, y = eastward_wind, group = parameter)) +
+  geom_line() + 
+  geom_vline(aes(xintercept = Sys.Date()), color = "blue")+
+  facet_wrap(~site_id)
+
+ggplot(combined_met_df, aes(x = datetime, y = surface_downwelling_shortwave_flux_in_air, group = parameter)) +
+  geom_line() + 
+  geom_vline(aes(xintercept = Sys.Date()), color = "blue")+
+  facet_wrap(~site_id)
+
+```
+
+#Tidymodels
+#Step 1: Obtain data
+```{r}
+lake_sites <- c("BARC", "SUGG", "CRAM", "LIRO", "TOOK", "PRPO", "PRLA")
+
+targets <- read_csv('https://data.ecoforecast.org/neon4cast-targets/aquatics/aquatics-targets.csv.gz',
+                    show_col_types = FALSE) |> 
+  filter(site_id %in% lake_sites)
+```
+
+```{r}
+targets <- targets |> 
+  filter(site_id %in% lake_sites,
+         variable == "temperature")
+```
+
+```{r}
+# past stacked weather
+df_past <- neon4cast::noaa_stage3()
+
+variables <- c("air_temperature", "northward_wind", "eastward_wind", "surface_downwelling_shortwave_flux_in_air")
+
+noaa_past <- df_past |> 
+  dplyr::filter(site_id %in% lake_sites,
+                datetime >= ymd('2017-01-01'),
+                variable %in% variables) |> 
+  dplyr::collect()
+```
+
+```{r}
+# aggregate the past to mean values
+noaa_past_mean <- noaa_past |> 
+  dplyr::mutate(datetime = as_date(datetime)) |> 
+  group_by(datetime, site_id, variable) |> 
+  dplyr::summarize(prediction = mean(prediction, na.rm = TRUE), .groups = "drop") |> 
+  pivot_wider(names_from = variable, values_from = prediction) |> 
+  # convert air temp to C
+  dplyr::mutate(air_temperature = air_temperature - 273.15)
+```
+
+```{r}
+#Create a new column with combined windspeed
+noaa_past_mean <- noaa_past_mean |>
+  mutate(windspeed = sqrt((northward_wind)^2 + (eastward_wind)^2))
+```
+
+
+```{r}
+forecast_date <- Sys.Date() 
+noaa_date <- forecast_date - lubridate::days(2)
+
+df_future <- neon4cast::noaa_stage2(start_date = noaa_date)
+
+variables <- c("air_temperature", "northward_wind", "eastward_wind", "surface_downwelling_shortwave_flux_in_air")
+
+noaa_future <- df_future |> 
+  dplyr::filter(reference_datetime == noaa_date,
+                datetime >= forecast_date,
+                site_id %in% lake_sites,
+                variable %in% variables) |> 
+  dplyr::collect() 
+```
+
+```{r}
+noaa_future_daily <- noaa_future |> 
+  dplyr::mutate(datetime = as_date(datetime)) |> 
+  # mean daily forecasts at each site per ensemble
+  dplyr::summarize(prediction = mean(prediction), .by = c("datetime", "site_id", "parameter", "variable")) |>
+  pivot_wider(names_from = variable, values_from = prediction) |>
+  # convert to Celsius
+  dplyr::mutate(air_temperature = air_temperature - 273.15) |> 
+  select(datetime, site_id, air_temperature, northward_wind, eastward_wind,surface_downwelling_shortwave_flux_in_air, parameter)
+```
+
+```{r}
+#Create a new column with combined windspeed
+noaa_future_daily <- noaa_future_daily |>
+  mutate(windspeed = sqrt((northward_wind)^2 + (eastward_wind)^2))
+```
+
+
+```{r}
+targets_df <- targets |> 
+  filter(variable == 'temperature') |>
+  pivot_wider(names_from = 'variable', values_from = 'observation') |> 
+  left_join(noaa_past_mean, 
+            by = c("datetime","site_id")) |> 
+  dplyr::mutate(doy = yday(datetime))
+```
+
+```{r}
+#ddply(targets_df, .(site_id), nrow) #count the no of rows by site
+```
+
+#Step 2: Pre-process data
+```{r}
+#Split data into training/testing sets
+#We are going to split the data into training and testing sets using the initial_split function. prop = 0.80 says to use 80% of the data in the training set.
+targets_df <- targets_df %>%
+  na.omit()
+split <- initial_split(targets_df, prop = 0.80, strata = site_id)
+split
+
+```
+
+```{r}
+#To actually get the training and testing data we need to apply the training() and testing() functions to the split.
+
+train_data <- training(split)
+test_data <- testing(split)
+```
+
+```{r}
+#You can see that train_data is a data frame that we can work with.
+train_data
+
+### Split training data into folds
+folds <- vfold_cv(train_data, v = 10)
+
+folds
+```
+
+Step 3: Feature engineering using a recipe
+```{r}
+#step_rm because we don’t want to use the datetime in the fit.
+#step_naomit because there are na values in the temperature and air_temperature columns. This is used here for illustrative purposes and can also be done by filtering the target data before it is split into training and testing groups
+our_recipe <- train_data |> 
+  recipe(temperature ~ .) |> 
+  step_rm(datetime, northward_wind, eastward_wind) |>
+  step_naomit(air_temperature, temperature, windspeed, surface_downwelling_shortwave_flux_in_air)
+
+our_recipe
+#Step 3: Specify model, engine, and workflow
+#mode = regression or classification
+rand_forest(
+  mode = "unknown",
+  engine = "ranger",
+  mtry = NULL,
+  trees = NULL,
+  min_n = NULL
+)
+
+our_model <- 
+  rand_forest(mtry = tune(), min_n = tune(), trees = 1000) %>%
+  set_engine("ranger", num.threads = parallel::detectCores()) |> 
+  set_mode("regression")
+
+#More info about different model structures here
+#https://parsnip.tidymodels.org/articles/Examples.html
+```
+
+#Step 4: Define workflow
+```{r}
+#We now combine the model and the recipe together to make a workflow that can be used to fit the training and testing data. workflow() initiates the workflow and add_model and add_recipe add those components to the workflow. Importantly, the workflow has not yet been applied, we just have description of what to do.
+wflow <-
+  workflow() |> 
+  add_model(our_model) |> 
+  add_recipe(our_recipe)
+
+wflow
+
+```
+
+#Step 4: Train model on Training Data
+```{r}
+#We will use the workflow object to train the model. We need to provide the workflow object and the dataset to the fit function to fit (i.e., train the model)
+#Estimate best hyper-parameters using tuning
+wflow_resample_fit <- 
+  wflow |>  
+  tune_grid(resamples = folds,
+            grid = 25,
+            control = control_grid(save_pred = TRUE),
+            metrics = metric_set(rmse))
+
+
+wflow_resample_fit %>% 
+  collect_metrics() |> 
+  arrange(mean)
+
+#select the best hyper-parameters
+best_hyperparameters <- wflow_resample_fit %>%
+  select_best("rmse")
+
+best_hyperparameters
+
+#Update the workflow with the best hyper-parameters
+final_workflow <- 
+  wflow %>% 
+  finalize_workflow(best_hyperparameters)
+
+
+# Fit to all training data
+fit <- final_workflow |> 
+  fit(data = train_data)
+
+fit
+```
+
+
+#Step 5: Predict Test Data
+```{r}
+#Now we will predict the testing data using the model that was fit to the training data.
+test_data <- test_data |>
+  na.omit()
+predictions <- predict(fit, new_data = test_data)
+
+predictions #single column with predictions
+#We need to combine the .pred column with the testing data using the bind_cols function
+pred_test <- bind_cols(test_data, predictions)
+pred_test
+```
+
+#Step 6: Evaluate model
+```{r}
+#We will evaluate the performance of our predictions of the testing data using two metrics (rmse and rsq). The function metric_set defines the set of metric we will be using them. It creates a function called multi_metric() that we will use to calculate the metrics. We pipe in the predicted test data (pred_test) and tell the function that our truth (i.e., observed data) is the temperature column and the predictions (i.e., estimate) is the .pred column
+multi_metric <- metric_set(rmse, rsq)
+
+metric_table <- pred_test |> 
+  multi_metric(truth = temperature, estimate = .pred)
+
+metric_table
+```
+```{r}
+predictions <- pred_test$.pred
+actual_values <- pred_test$temperature
+
+ggplot(data = data.frame(predictions, actual_values),
+       aes(x=predictions, y=actual_values))+
+  geom_point()+
+  geom_abline(intercept=0, slope=1, linetype="dashed", color = "red")+
+  labs(title = "Scatter plot of predictions and observations",
+  x = "Predictions",
+  y = "Actual values") +
+  theme_minimal()
+  
+```
+
+
+#Step 7: Deploy model
+```{r}
+#same as deterministic forecast
+targets_future <- noaa_future_daily |> 
+  dplyr::mutate(temperature = NA,
+         doy = yday(datetime)) |> 
+  filter(parameter == 1) |> 
+  select(-parameter)
+
+#You will notice that the temperature is all NA because you don’t know what the temperature is of the site.
+
+targets_future
+
+#As in “Step 5: Predict Test Data”, use the model fitting on the training data (fit) to predict the new data.
+new_predictions <- predict(fit, new_data = targets_future)
+
+#Probabilistic forecast
+#residual for each ensemble prediction
+residuals <- pred_test$.pred - pred_test$temperature
+err <- mean(residuals, na.rm = TRUE) 
+
+#Create sigma distribution to use for process uncertainty later
+sigma <- sd(residuals, na.rm = TRUE)
+
+targets_future <- noaa_future_daily |> 
+  mutate(temperature = NA,
+         doy = yday(datetime))
+
+tidymodels_forecast <- data.frame()
+
+for(i in unique(targets_future$parameter)){
+  curr_ens <- targets_future |> 
+    filter(parameter == i) |> 
+    select(-parameter)
+  
+  new_predictions <- predict(fit, new_data = curr_ens)
+  
+  #add process uncertainty to each ensemble members
+  new_predictions$.pred = new_predictions$.pred + rnorm(n = length(new_predictions$.pred), mean = 0, sd = sigma)
+  curr_ens <- bind_cols(curr_ens, new_predictions) |> 
+    mutate(parameter = i)
+
+  tidymodels_forecast <- bind_rows(tidymodels_forecast, curr_ens)
+}
+
+```
+
+```{r}
+tidymodels_forecasts_EFI <- tidymodels_forecast %>%
+  rename(predicted_water_temperature = .pred) %>%
+  mutate(variable = "temperature") |> 
+  # For the EFI challenge we only want the forecast for future
+  filter(datetime > Sys.Date()) %>%
+  group_by(site_id, variable) %>%
+  mutate(reference_datetime = min(datetime) - lubridate::days(1),
+         family = "ensemble",
+         model_id = "tidymodels_RF") %>%
+  select(model_id, datetime, reference_datetime, site_id, family, parameter, variable, predicted_water_temperature)
+
+tidymodels_forecasts_EFI |>
+  filter(variable == "temperature") |>
+  ggplot(aes(x = datetime, y = predicted_water_temperature, group = parameter)) +
+  geom_vline(aes(xintercept = Sys.Date() + lubridate::days(1)), color = "blue")+
+  geom_line() + 
+  facet_wrap(~site_id)
+```
+
+Remember to change the model_id when you make changes to the model structure!
+
+## Convert to EFI standard for submission
+For an ensemble forecast the documentation specifies the following columns:
+
+* `datetime`: forecast timestamp for each time step
+* `reference_datetime`: The start of the forecast; this should be 0 times steps in the future. This should only be one value of reference_datetime in the file
+* `site_id`: NEON code for site
+* `family`: name of probability distribution that is described by the parameter values in the parameter column; only `normal` or `ensemble` are currently allowed.
+* `parameter`: integer value for forecast replicate (from the `.rep` in fable output);
+* `variable`: standardized variable name from the theme 
+* `prediction`: forecasted value (from the `.sim` column in fable output)
+* `model_id`: model name (no spaces). Any model_id that includes 'example' will not be included in analysis. It will still be evaluated against observations but will be deleted. This is good for testing and trying out new modelling ideas. 
+
+We need to make sure the dataframe is in the correct format and then we can submit this to the challenge as well! This is an ensemble forecast (specified in the `family` column). 
+
+Remember to change the model_id when you make changes to the model structure!
+
+```{r}
+my_model_id <- 'bee_bake_RFModel_2024'
+```
+
+```{r make-standard}
+# Make forecast fit the EFI standards
+tidymodels_forecasts_EFI <- tidymodels_forecast %>%
+  filter(datetime > forecast_date) %>%
+  mutate(model_id = my_model_id,
+         reference_datetime = forecast_date,
+         family = 'ensemble',
+         variable = 'temperature',
+         prediction = .pred,
+         parameter = as.character(parameter)) %>%
+  select(datetime, reference_datetime, site_id, family, parameter, variable, prediction, model_id)
+
+```
+
+
+```{r write-forecast}
+# Write the forecast to file
+theme <- 'aquatics'
+date <- tidymodels_forecasts_EFI$reference_datetime[1]
+forecast_name_1 <- paste0(tidymodels_forecasts_EFI$model_id[1], ".csv")
+forecast_file_1 <- paste(theme, date, forecast_name_1, sep = '-')
+forecast_file_1
+
+
+if (!dir.exists('Forecasts')) {
+  dir.create('Forecasts')
+}
+
+write_csv(tidymodels_forecasts_EFI, file.path('Forecasts',forecast_file_1))
+```
+
+Check that forecast format is valid
+
+```{r}
+neon4cast::forecast_output_validator(file.path('Forecasts',forecast_file_1))
+```
+
+Change eval = TRUE if you want to submit
+
+```{r submit-forecast}
+
+neon4cast::submit(forecast_file = file.path('Forecasts', forecast_file_1), ask = FALSE) # if ask = T (default), it will produce a pop-up box asking if you want to submit
+
+```
+
+#Plot the forecast
+```{r plot-forecast}
+tidymodels_forecasts_EFI |> 
+  ggplot(aes(x=datetime, y=prediction, group = parameter)) +
+  geom_line() +
+  ylab("predicted_water_temperature")+
+  facet_wrap(~site_id) +
+  geom_vline(aes(xintercept = Sys.Date() + lubridate::days(1)), color = "blue")+
+  labs(title = paste0('Forecast generated for ', tidymodels_forecasts_EFI$variable[1], ' on ', tidymodels_forecasts_EFI$reference_datetime[1]))
+```
+
+#The end!
+
+
+
+
+
+
