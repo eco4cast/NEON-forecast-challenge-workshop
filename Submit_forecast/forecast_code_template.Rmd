@@ -66,7 +66,11 @@ noaa_past_mean <- noaa_past |>
   summarize(prediction = mean(prediction, na.rm = TRUE), .groups = "drop") |> 
   # convert air temperature to Celsius if it is included in the weather data
   mutate(prediction = ifelse(variable == "air_temperature", prediction - 273.15, prediction)) |> 
+<<<<<<< HEAD
   pivot_wider(names_from = variable, values_from = prediction)
+=======
+  pivot_wider(names_from = variable, values_from = prediction) 
+>>>>>>> a07efb2cd47cdcc995273873e0718466ba47033c
 ```
 
 ```{r get-NOAA-future, message = F}
@@ -182,7 +186,11 @@ neon4cast::forecast_output_validator(file.path('Forecasts',forecast_file_1))
 
 Change eval = TRUE if you want to submit
 
+<<<<<<< HEAD
 ```{r submit-forecast}
+=======
+```{r submit-forecast, eval= FALSE}
+>>>>>>> a07efb2cd47cdcc995273873e0718466ba47033c
 
 neon4cast::submit(forecast_file = file.path('Forecasts', forecast_file_1), ask = FALSE) # if ask = T (default), it will produce a pop-up box asking if you want to submit
 
