@@ -1,4 +1,5 @@
-[![DOI](https://jose.theoj.org/papers/10.21105/jose.00259/status.svg)](https://doi.org/10.21105/jose.00259)
+[![DOI](https://jose.theoj.org/papers/10.21105/jose.00259/status.svg)](https://doi.org/10.21105/jose.00259) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14018090.svg)](https://doi.org/10.5281/zenodo.14018090)
+
 
 # NEON Forecast Challenge Workshop Pre-Workshop Instructions
 
