@@ -8,7 +8,18 @@ library(tidyverse)
 library(lubridate)
 #--------------------------#
 
+# Change this for your model ID
+# Include the word "example" in my_model_id for a test submission
+# Don't include the word "example" in my_model_id for a forecast that you have registered (see neon4cast.org for the registration form)
+my_model_id <- 'example_ID'
 
+# --Model description--- #
+
+# Add a brief description of your modeling approach
+
+# -- Uncertainty representation -- #
+
+# Describe what sources of uncertainty are included in your forecast and how you estimate each source.
 
 #------- Read data --------
 # read in the targets data
@@ -120,7 +131,7 @@ for(i in 1:length(lake_sites$field_site_id)) {
   message(example_site, 'forecast run')
   
 }
-my_model_id <- 'example_ID'
+
 
 #--------------------------#
 
@@ -154,6 +165,7 @@ neon4cast::forecast_output_validator(forecast_file)
 
 
 neon4cast::submit(forecast_file =  forecast_file, ask = FALSE) # if ask = T (default), it will produce a pop-up box asking if you want to submit
+
 #--------------------------#
 
 forecast_df_EFI |> 
@@ -161,3 +173,8 @@ forecast_df_EFI |>
   geom_line() +
   facet_wrap(~site_id) +
   labs(title = paste0('Forecast generated for ', forecast_df_EFI$variable[1], ' on ', forecast_df_EFI$reference_datetime[1]))
+
+plot_file_name <- paste0("Submit_forecast/", forecast_df_EFI$variable[1], '-', forecast_df_EFI$reference_datetime[1], ".png")
+ggsave(plot_file_name)
+
+
