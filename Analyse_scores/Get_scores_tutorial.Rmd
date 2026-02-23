@@ -3,7 +3,7 @@ title: "Analysing your forecasts"
 author: "Freya Olsson"
 output:
   md_document: 
-    variant: markdown_github
+    variant: gfm
     number_sections: true
     toc: true
 date: "`r Sys.Date()`"
@@ -364,7 +364,7 @@ Earlier in the forecast we gain skill by using the ARIMA model but beyond 9 days
 -   And answer synthesis questions such as: Are there particular sites that generally have better/worse predictions? Is this the same across variables? Which models perform best at each site?
 -   At what horizon is a model of interest better than a null model?
 
-Explore the inventory (or STAC) for different themes, models and variables on the [STAC catalog](https://radiantearth.github.io/stac-browser/#/external/raw.githubusercontent.com/eco4cast/neon4cast-ci/main/catalog/catalog.json)
+Explore the inventory (or STAC) for different themes, models and variables on the [STAC catalog](https://radiantearth.github.io/stac-browser/#/external/raw.githubusercontent.com/eco4cast/neon4cast-catalog/main/catalog.json)
 
 # Tips and tricks
 

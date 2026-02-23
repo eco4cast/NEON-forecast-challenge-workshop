@@ -1,24 +1,24 @@
--   [1 Background on scores and skill](#background-on-scores-and-skill)
--   [2 This tutorial](#this-tutorial)
-    -   [2.1 Working with arrow and parquet
-        datasets](#working-with-arrow-and-parquet-datasets)
-    -   [2.2 Opening the bucket](#opening-the-bucket)
-    -   [2.3 Querying the database](#querying-the-database)
-    -   [2.4 Scores analysis](#scores-analysis)
-    -   [2.5 Visualising and summarising forecast
-        scores](#visualising-and-summarising-forecast-scores)
-        -   [2.5.1 Comparing an inidivudal forecast for multiple
-            models](#comparing-an-inidivudal-forecast-for-multiple-models)
-        -   [2.5.2 One day ahead forecasts over
-            time](#one-day-ahead-forecasts-over-time)
-        -   [2.5.3 Forecast performance over
-            horizon](#forecast-performance-over-horizon)
-        -   [2.5.4 Forecast skill](#forecast-skill)
--   [3 Next steps](#next-steps)
--   [4 Tips and tricks](#tips-and-tricks)
-    -   [4.1 Another way to access the same
-        files](#another-way-to-access-the-same-files)
-    -   [4.2 Writing locally](#writing-locally)
+- [1 Background on scores and skill](#background-on-scores-and-skill)
+- [2 This tutorial](#this-tutorial)
+  - [2.1 Working with arrow and parquet
+    datasets](#working-with-arrow-and-parquet-datasets)
+  - [2.2 Opening the bucket](#opening-the-bucket)
+  - [2.3 Querying the database](#querying-the-database)
+  - [2.4 Scores analysis](#scores-analysis)
+  - [2.5 Visualising and summarising forecast
+    scores](#visualising-and-summarising-forecast-scores)
+    - [2.5.1 Comparing an inidivudal forecast for multiple
+      models](#comparing-an-inidivudal-forecast-for-multiple-models)
+    - [2.5.2 One day ahead forecasts over
+      time](#one-day-ahead-forecasts-over-time)
+    - [2.5.3 Forecast performance over
+      horizon](#forecast-performance-over-horizon)
+    - [2.5.4 Forecast skill](#forecast-skill)
+- [3 Next steps](#next-steps)
+- [4 Tips and tricks](#tips-and-tricks)
+  - [4.1 Another way to access the same
+    files](#another-way-to-access-the-same-files)
+  - [4.2 Writing locally](#writing-locally)
 
 # 1 Background on scores and skill
 
@@ -111,7 +111,8 @@ you pointed to in `scores_location` which can then be queried (using
 `dplyr` functions) before bringing locally. This is what this object
 look like:
 
-    ## FileSystemDataset with 448 Parquet files
+    ## FileSystemDataset with 487 Parquet files
+    ## 19 columns
     ## reference_datetime: timestamp[us, tz=UTC]
     ## site_id: string
     ## datetime: timestamp[us, tz=UTC]
@@ -183,6 +184,7 @@ some_scores
 ```
 
     ## FileSystemDataset with 1 Parquet file
+    ## 15 columns
     ## reference_datetime: timestamp[us, tz=UTC]
     ## site_id: string
     ## datetime: timestamp[us, tz=UTC]
@@ -229,19 +231,19 @@ This is a single site, single date score!
     ## Columns: 15
     ## $ reference_datetime <dttm> 2024-08-01, 2024-08-01, 2024-08-01, 2024-08-01, 20…
     ## $ site_id            <chr> "TOOK", "TOOK", "TOOK", "TOOK", "TOOK", "TOOK", "TO…
-    ## $ datetime           <dttm> 2024-08-19, 2024-08-19, 2024-08-12, 2024-08-28, 20…
+    ## $ datetime           <dttm> 2024-08-25, 2024-08-26, 2024-08-25, 2024-08-31, 20…
     ## $ family             <chr> "sample", "sample", "sample", "sample", "sample", "…
     ## $ pub_datetime       <dttm> 2024-08-23 12:15:00, 2024-08-23 12:15:00, 2024-08-…
-    ## $ observation        <dbl> 10.690005, 10.690005, 12.617826, 9.070627, 11.99147…
-    ## $ crps               <dbl> 1.4418730, 1.4418730, 0.6769774, 2.4525575, 0.82405…
-    ## $ logs               <dbl> 2.450047, 2.450047, 1.885557, 2.937972, 1.953193, 3…
-    ## $ mean               <dbl> 13.05737, 13.05737, 13.27120, 12.98030, 13.21153, 1…
-    ## $ median             <dbl> 12.87911, 12.87911, 13.26632, 12.91765, 13.29858, 1…
-    ## $ sd                 <dbl> 3.987435, 3.987435, 3.242152, 4.611229, 1.818266, 5…
-    ## $ quantile97.5       <dbl> 20.74324, 20.74324, 21.01975, 21.10618, 16.32044, 2…
-    ## $ quantile02.5       <dbl> 5.3087908, 5.3087908, 7.0432708, 2.0227346, 7.71393…
-    ## $ quantile90         <dbl> 19.73577, 19.73577, 18.24087, 20.23551, 15.43439, 1…
-    ## $ quantile10         <dbl> 6.841891, 6.841891, 7.950700, 5.568818, 10.626983, …
+    ## $ observation        <dbl> 9.230459, 9.331875, 9.227955, 8.721957, 8.420455, 1…
+    ## $ crps               <dbl> 2.2609574, 2.2174299, 2.2625603, 2.6128605, 2.86803…
+    ## $ logs               <dbl> 2.830470, 2.795937, 2.831083, 2.999487, 3.122608, 2…
+    ## $ mean               <dbl> 12.89013, 12.93695, 12.89013, 12.86110, 12.88360, 1…
+    ## $ median             <dbl> 12.93889, 12.84079, 12.93889, 12.87053, 13.02992, 1…
+    ## $ sd                 <dbl> 4.453088, 4.543163, 4.453088, 4.857791, 4.898426, 3…
+    ## $ quantile97.5       <dbl> 20.80496, 21.01044, 20.80496, 21.96433, 22.20838, 2…
+    ## $ quantile02.5       <dbl> 2.1259717, 2.0057561, 2.1259717, 1.5616955, 1.43856…
+    ## $ quantile90         <dbl> 20.35031, 20.35096, 20.35031, 20.03533, 20.16936, 1…
+    ## $ quantile10         <dbl> 5.091251, 5.398139, 5.091251, 4.797987, 4.897989, 7…
 
 We can inspect this data to see what we’ve got!
 
@@ -259,12 +261,12 @@ some_scores |>
     ## # A tibble: 6 × 1
     ##   reference_datetime 
     ##   <dttm>             
-    ## 1 2024-08-20 00:00:00
-    ## 2 2024-09-08 00:00:00
-    ## 3 2024-06-12 00:00:00
-    ## 4 2023-02-17 00:00:00
-    ## 5 2024-01-04 00:00:00
-    ## 6 2022-09-18 00:00:00
+    ## 1 2023-01-13 00:00:00
+    ## 2 2024-05-02 00:00:00
+    ## 3 2024-06-22 00:00:00
+    ## 4 2023-12-29 00:00:00
+    ## 5 2024-03-27 00:00:00
+    ## 6 2023-05-03 00:00:00
 
 Or what other sites are available on that same reference_datetime:
 
@@ -278,12 +280,12 @@ some_scores |>
     ## # A tibble: 6 × 1
     ##   site_id
     ##   <chr>  
-    ## 1 WLOU   
-    ## 2 BLDE   
-    ## 3 COMO   
-    ## 4 PRPO   
-    ## 5 ARIK   
-    ## 6 CARI
+    ## 1 CRAM   
+    ## 2 MCRA   
+    ## 3 MCDI   
+    ## 4 COMO   
+    ## 5 POSE   
+    ## 6 LEWI
 
 > Note: use `pull(as_vector = TRUE)` instead of `collect()` to return a
 > vector rather than a dataframe (can sometimes be a more useful
@@ -346,23 +348,23 @@ scores_analysis |> glimpse()
 
     ## Rows: 47,004
     ## Columns: 19
-    ## $ reference_datetime <dttm> 2024-06-15, 2024-06-20, 2024-06-29, 2024-06-21, 20…
-    ## $ site_id            <chr> "SUGG", "SUGG", "BARC", "BARC", "SUGG", "SUGG", "BA…
-    ## $ datetime           <dttm> 2024-07-01, 2024-07-05, 2024-07-23, 2024-06-30, 20…
-    ## $ family             <chr> "sample", "sample", "sample", "sample", "sample", "…
-    ## $ pub_datetime       <dttm> 2024-06-15 14:05:14, 2024-06-20 14:04:21, 2024-07-…
-    ## $ observation        <dbl> 31.01265, 31.60462, 31.98197, 31.17596, 31.50273, 3…
-    ## $ crps               <dbl> 0.5393640, 0.7060087, 0.5828514, 0.4772532, 0.54177…
-    ## $ logs               <dbl> 1.8030431, 1.9133970, 1.8715355, 1.5960738, 1.77498…
-    ## $ mean               <dbl> 30.99647, 30.67076, 31.61709, 30.64118, 31.09615, 3…
-    ## $ median             <dbl> 31.04579, 30.74461, 31.60887, 30.61320, 31.01963, 3…
-    ## $ sd                 <dbl> 2.3904500, 2.5150183, 2.3887886, 1.6794863, 2.11815…
-    ## $ quantile97.5       <dbl> 35.45648, 35.42419, 35.60374, 33.64973, 34.88409, 3…
-    ## $ quantile02.5       <dbl> 26.24817, 25.85499, 26.84019, 27.92805, 27.29202, 2…
-    ## $ quantile90         <dbl> 35.00568, 34.61821, 35.25132, 33.31644, 34.47808, 3…
-    ## $ quantile10         <dbl> 26.67154, 26.89983, 27.93635, 28.28010, 27.76871, 2…
+    ## $ reference_datetime <dttm> 2024-06-05, 2024-06-27, 2024-06-28, 2024-05-31, 20…
+    ## $ site_id            <chr> "SUGG", "SUGG", "SUGG", "BARC", "SUGG", "BARC", "SU…
+    ## $ datetime           <dttm> 2024-06-25, 2024-07-28, 2024-07-29, 2024-06-12, 20…
+    ## $ family             <chr> "normal", "normal", "normal", "normal", "normal", "…
+    ## $ pub_datetime       <dttm> 2024-06-05 22:03:19, 2024-06-27 22:03:39, 2024-07-…
+    ## $ observation        <dbl> 31.10128, 29.81622, 29.56747, 31.25463, 31.19552, 3…
+    ## $ crps               <dbl> 0.7747810, 0.3582524, 0.6130169, 0.7811438, 1.33521…
+    ## $ logs               <dbl> 1.7106705, 1.1880062, 1.4615932, 1.6907194, 2.26030…
+    ## $ mean               <dbl> 29.79895, 30.29867, 30.59648, 29.94819, 29.11684, 3…
+    ## $ median             <dbl> 29.79895, 30.29867, 30.59648, 29.94819, 29.11684, 3…
+    ## $ sd                 <dbl> 1.5526055, 1.2085039, 1.1641930, 1.3989462, 1.54260…
+    ## $ quantile97.5       <dbl> 32.84200, 32.66729, 32.87826, 32.69007, 32.14029, 3…
+    ## $ quantile02.5       <dbl> 26.75590, 27.93005, 28.31470, 27.20631, 26.09339, 3…
+    ## $ quantile90         <dbl> 32.35276, 32.28648, 32.51141, 32.24925, 31.65420, 3…
+    ## $ quantile10         <dbl> 27.24514, 28.31086, 28.68155, 27.64713, 26.57948, 3…
     ## $ duration           <chr> "P1D", "P1D", "P1D", "P1D", "P1D", "P1D", "P1D", "P…
-    ## $ model_id           <chr> "fARIMA", "fARIMA", "fARIMA", "fARIMA", "fARIMA", "…
+    ## $ model_id           <chr> "climatology", "climatology", "climatology", "clima…
     ## $ project_id         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     ## $ variable           <chr> "temperature", "temperature", "temperature", "tempe…
 
@@ -435,7 +437,7 @@ filtered_scores |>
   theme_bw()
 ```
 
-![](Get_scores_tutorial_files/figure-markdown_github/forecast-obs-plot-1.png)
+![](Get_scores_tutorial_files/figure-gfm/forecast-obs-plot-1.png)<!-- -->
 
 These types of plots are useful for visually looking at the forecast
 skill but to quantitatively access we can useful one of the scoring
@@ -457,7 +459,7 @@ filtered_scores |>
   theme_bw()
 ```
 
-![](Get_scores_tutorial_files/figure-markdown_github/crps-plot-1.png)
+![](Get_scores_tutorial_files/figure-gfm/crps-plot-1.png)<!-- -->
 
 We see that the persistenceRW null model does well earlier in the
 forecast than later, and the climatology is kind of all over! If we want
@@ -491,7 +493,7 @@ scores_analysis |>
   theme_bw()
 ```
 
-![](Get_scores_tutorial_files/figure-markdown_github/oneday~time-1.png)
+![](Get_scores_tutorial_files/figure-gfm/oneday~time-1.png)<!-- -->
 
 Generally the persistenceRW does better at these shorter horizons for
 more forecast days. What about other horizons?
@@ -521,7 +523,7 @@ scores_analysis |>
   theme_bw()
 ```
 
-![](Get_scores_tutorial_files/figure-markdown_github/horizon~sites-1.png)
+![](Get_scores_tutorial_files/figure-gfm/horizon~sites-1.png)<!-- -->
 
 The patterns look fairly similar between the two sites with persistence
 lower initially but then score increases over the horizon and is beaten
@@ -531,7 +533,7 @@ Remember CRPS is reported in native units (mg/L for DO and degrees
 celcius for temperature), and so cannot be easily compared between
 variables. Instead we can use logs scores in this case.
 
-![](Get_scores_tutorial_files/figure-markdown_github/logs-1.png)
+![](Get_scores_tutorial_files/figure-gfm/logs-1.png)<!-- -->
 
 Also these summary plots work better when there are multiple forecasts
 at each horizon (ie. if you have, for example, a year of forecasts). The
@@ -576,13 +578,17 @@ scores_analysis |>
   annotate(geom = 'text', x = 30, y =  -0.1, label = 'worse than null')
 ```
 
-    ## `summarise()` has grouped output by 'horizon', 'variable'. You can override
-    ## using the `.groups` argument.
+    ## `summarise()` has regrouped the output.
+    ## ℹ Summaries were computed grouped by horizon, variable, and site_id.
+    ## ℹ Output is grouped by horizon and variable.
+    ## ℹ Use `summarise(.groups = "drop_last")` to silence this message.
+    ## ℹ Use `summarise(.by = c(horizon, variable, site_id))` for per-operation
+    ##   grouping (`?dplyr::dplyr_by`) instead.
 
     ## Warning: Removed 1 row containing missing values or values outside the scale range
     ## (`geom_line()`).
 
-![](Get_scores_tutorial_files/figure-markdown_github/unnamed-chunk-5-1.png)
+![](Get_scores_tutorial_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 Earlier in the forecast we gain skill by using the ARIMA model but
 beyond 9 days the null model is better and the skill is negative (no
@@ -590,16 +596,16 @@ additional skill is gained by using the ARIMA over the null model).
 
 # 3 Next steps
 
--   You can use this code to look at how well different models are doing
-    compared to a model of interest
--   And answer synthesis questions such as: Are there particular sites
-    that generally have better/worse predictions? Is this the same
-    across variables? Which models perform best at each site?
--   At what horizon is a model of interest better than a null model?
+- You can use this code to look at how well different models are doing
+  compared to a model of interest
+- And answer synthesis questions such as: Are there particular sites
+  that generally have better/worse predictions? Is this the same across
+  variables? Which models perform best at each site?
+- At what horizon is a model of interest better than a null model?
 
 Explore the inventory (or STAC) for different themes, models and
 variables on the [STAC
-catalog](https://radiantearth.github.io/stac-browser/#/external/raw.githubusercontent.com/eco4cast/neon4cast-ci/main/catalog/catalog.json)
+catalog](https://radiantearth.github.io/stac-browser/#/external/raw.githubusercontent.com/eco4cast/neon4cast-catalog/main/catalog.json)
 
 # 4 Tips and tricks
 
@@ -680,12 +686,12 @@ arrow::s3_bucket(bucket = "bio230014-bucket01/challenges/scores/bundled-parquet/
     ## # A tibble: 6 × 15
     ##   reference_datetime  site_id datetime            family pub_datetime       
     ##   <dttm>              <chr>   <dttm>              <chr>  <dttm>             
-    ## 1 2024-08-01 00:00:00 WLOU    2024-08-10 00:00:00 sample 2024-08-23 12:15:00
-    ## 2 2024-08-01 00:00:00 BLDE    2024-09-04 00:00:00 sample 2024-08-23 12:15:00
-    ## 3 2024-08-01 00:00:00 COMO    2024-08-26 00:00:00 sample 2024-08-23 12:15:00
-    ## 4 2024-08-01 00:00:00 PRPO    2024-08-17 00:00:00 sample 2024-08-23 12:15:00
-    ## 5 2024-08-01 00:00:00 ARIK    2024-08-12 00:00:00 sample 2024-08-23 12:15:00
-    ## 6 2024-08-01 00:00:00 ARIK    2024-08-04 00:00:00 sample 2024-08-23 12:15:00
+    ## 1 2024-08-01 00:00:00 CRAM    2024-08-24 00:00:00 sample 2024-08-23 12:15:00
+    ## 2 2024-08-01 00:00:00 MCRA    2024-08-20 00:00:00 sample 2024-08-23 12:15:00
+    ## 3 2024-08-01 00:00:00 POSE    2024-08-24 00:00:00 sample 2024-08-23 12:15:00
+    ## 4 2024-08-01 00:00:00 MCDI    2024-08-10 00:00:00 sample 2024-08-23 12:15:00
+    ## 5 2024-08-01 00:00:00 COMO    2024-08-03 00:00:00 sample 2024-08-23 12:15:00
+    ## 6 2024-08-01 00:00:00 LEWI    2024-08-13 00:00:00 sample 2024-08-23 12:15:00
     ## # ℹ 10 more variables: observation <dbl>, crps <dbl>, logs <dbl>, mean <dbl>,
     ## #   median <dbl>, sd <dbl>, quantile97.5 <dbl>, quantile02.5 <dbl>,
     ## #   quantile90 <dbl>, quantile10 <dbl>

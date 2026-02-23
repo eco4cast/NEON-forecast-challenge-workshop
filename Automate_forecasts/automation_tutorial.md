@@ -1,11 +1,11 @@
--   [1 Introduction](#introduction)
--   [2 The environment - Docker](#the-environment---docker)
--   [3 The platform - Github Actions](#the-platform---github-actions)
--   [4 Let’s try and put this together](#lets-try-and-put-this-together)
-    -   [4.1 Writing your forecast code](#writing-your-forecast-code)
-    -   [4.2 Writing a yaml](#writing-a-yaml)
-    -   [4.3 Enable Actions](#enable-actions)
-    -   [4.4 Test the Action](#test-the-action)
+- [1 Introduction](#introduction)
+- [2 The environment - Docker](#the-environment---docker)
+- [3 The platform - Github Actions](#the-platform---github-actions)
+- [4 Let’s try and put this together](#lets-try-and-put-this-together)
+  - [4.1 Writing your forecast code](#writing-your-forecast-code)
+  - [4.2 Writing a yaml](#writing-a-yaml)
+  - [4.3 Enable Actions](#enable-actions)
+  - [4.4 Test the Action](#test-the-action)
 
 # 1 Introduction
 
@@ -59,21 +59,21 @@ A basic description of a Github action:
 > virtual machine or container, and has one or more *steps* that either
 > run a script that you define or run an action.
 
--   `on` tells you what triggers the workflow - here we use a `schedule`
-    to determine the action based on a `cron` schedule (i.e. a timer) to
-    run a 12 (UTC), everyday. You can update this to run on a different
-    schedule based on timing codes found in <https://crontab.guru>.
--   `jobs` this is what you are telling the machine to do. You can see
-    that within the job we have other instructions that tell the machine
-    what `container` to use and the various `steps` in the job. We use a
-    container `image` from eco4cast that has the neon4cast package plus
-    others installed (`eco4cast/rocker-neon4cast`).
-    -   The first step is to `checkout repo` which uses a pre-made
-        action `checkout` to get a copy of the Github repo.
-    -   Next, within the container, we run the R script
-        `forecast_code_template.R` from the Submit_forecast tutorial -
-        this is your forecast code that generates a forecast file and
-        has code to submit the saved forecast to the Challenge.
+- `on` tells you what triggers the workflow - here we use a `schedule`
+  to determine the action based on a `cron` schedule (i.e. a timer) to
+  run a 12 (UTC), everyday. You can update this to run on a different
+  schedule based on timing codes found in <https://crontab.guru>.
+- `jobs` this is what you are telling the machine to do. You can see
+  that within the job we have other instructions that tell the machine
+  what `container` to use and the various `steps` in the job. We use a
+  container `image` from eco4cast that has the neon4cast package plus
+  others installed (`eco4cast/rocker-neon4cast`).
+  - The first step is to `checkout repo` which uses a pre-made action
+    `checkout` to get a copy of the Github repo.
+  - Next, within the container, we run the R script
+    `forecast_code_template.R` from the Submit_forecast tutorial - this
+    is your forecast code that generates a forecast file and has code to
+    submit the saved forecast to the Challenge.
 
 Note: the indentation matters, make sure the indentation is as formatted
 here!
@@ -127,14 +127,14 @@ parent_dir <- here::here()
 dir.create(file.path(parent_dir,'.github/workflows'), recursive = T, showWarnings = F)
 ```
 
-1.  Create yaml file Open a new text file either in R or another text
+2.  Create yaml file Open a new text file either in R or another text
     editor and copy and paste the above code in, ensuring the
     indentation is correct. Save the file into a sub-directory called
     `.github/workflows` in the parent directory
     (`NEON-forecast-challenge-workshop/.github/workflows/run_forecast.yaml`)
     ensuring that the file extension is `.yaml`.
 
-2.  Commit changes and push to Github
+3.  Commit changes and push to Github
 
 ## 4.3 Enable Actions
 
@@ -144,15 +144,15 @@ General and check the Allow actions and reusable workflows.
 
 ## 4.4 Test the Action
 
--   Go back to Actions.
--   Click on the workflow in the left panel
-    `.github/workflows/run_forecast.yaml`
--   Test the workflow runs by using the Run workflow button \> Run
-    workflow
--   Your job has been requested and will initiate soon
--   The progress of the job can be checked by clicking on it (Yellow
-    running, Green completed, Red failed)
--   You can view the output of the job including what is produced in the
-    console by clicking on the relevant sections of the job
+- Go back to Actions.
+- Click on the workflow in the left panel
+  `.github/workflows/run_forecast.yaml`
+- Test the workflow runs by using the Run workflow button \> Run
+  workflow
+- Your job has been requested and will initiate soon
+- The progress of the job can be checked by clicking on it (Yellow
+  running, Green completed, Red failed)
+- You can view the output of the job including what is produced in the
+  console by clicking on the relevant sections of the job
 
 You now have a fully automated forecast workflow!

@@ -3,7 +3,7 @@ title: "NEON forecast challenge - aquatics"
 author: Freya Olsson
 output:
   md_document: 
-    variant: markdown_github
+    variant: gfm
     number_sections: true
     toc: true
 date: "`r Sys.Date()`"
@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 This document presents workshop materials to get you started on generating forecasts specifically for submission to the EFI-NEON Forecasting Challenge.
 The Challenge goal is to create a community of practice that builds capacity for ecological forecasting by leveraging NEON data products.
 The Challenge revolves around the five theme areas that span aquatic and terrestrial systems, and population, community, and ecosystem processes across a broad range of ecoregions that uses data collected by NEON.
-Learn more about the Challenge [here](https://projects.ecoforecast.org/neon4cast-docs/)!
+Learn more about the Challenge [here](https://projects.ecoforecast.org/neon4cast-ci/)!
 
 The development of these materials has been supported by NSF grants DEB-1926388 and DBI-1933016.
 
@@ -66,7 +66,7 @@ We are excited to use this Challenge to learn more about the predictability of e
 Which modeling frameworks, mechanistic processes, and statistical approaches best capture community, population, and ecosystem dynamics?
 These questions are answerable by a community generating a diverse array of forecasts.
 The Challenge is open to any individual or team from anywhere around the world that wants to submit forecasts.
-Sign up [here.](https://projects.ecoforecast.org/neon4cast-docs/Participation.html).
+Sign up [here.](https://projects.ecoforecast.org/neon4cast-ci/instructions.html).
 
 ## Aquatics challenge
 
@@ -81,7 +81,7 @@ The only requirement is that submissions are predictions of the future at the ti
 Today we will focus on lake sites only and will start with forecasting water temperature.
 For the challenge, you can chose to submit to either the lakes, rivers or streams or all three!
 You can also chose to submit any of the three focal variables (temperature, oxygen, and chlorophyll).
-Find more information about the aquatics challenge [here](https://projects.ecoforecast.org/neon4cast-docs/Aquatics.html).
+Find more information about the aquatics challenge [here](https://projects.ecoforecast.org/neon4cast-ci/targets.html).
 
 ## Submission requirements
 
@@ -105,7 +105,7 @@ Here is how you read in the data from the targets file available from the EFI se
 
 ```{r eval=TRUE, echo = TRUE, error=FALSE, warning=FALSE, message=FALSE}
 #read in the targets data
-targets <- read_csv('https://data.ecoforecast.org/neon4cast-targets/aquatics/aquatics-targets.csv.gz')
+targets <- read_csv("https://sdsc.osn.xsede.org/bio230014-bucket01/challenges/targets/project_id=neon4cast/duration=P1D/aquatics-targets.csv.gz")
 ```
 
 Information on the NEON sites can be found in the `NEON_Field_Site_Metadata_20220412.csv` file in the `eco4cast` repository on GitHub. It can be filtered to only include aquatic sites.
@@ -113,7 +113,7 @@ This table has information about the field sites, including location, ecoregion,
 
 ```{r eval=TRUE, echo = TRUE, error=FALSE, warning=FALSE, message=FALSE}
 # read in the sites data
-aquatic_sites <- read_csv("https://raw.githubusercontent.com/eco4cast/neon4cast-targets/main/NEON_Field_Site_Metadata_20220412.csv") |>
+aquatic_sites <- read_csv("https://raw.githubusercontent.com/eco4cast/neon4cast-ci/refs/heads/main/neon4cast_field_site_metadata.csv") |>
   dplyr::filter(aquatics == 1)
 ```
 
@@ -429,7 +429,7 @@ temp_lm_forecast_EFI <- temp_lm_forecast %>%
          parameter = as.character(parameter),
          duration = 'P1D',
          project_id = 'neon4cast') %>%
-  select(datetime, reference_datetime, site_id, family, parameter, variable, prediction, model_id)
+  select(project_id, datetime, reference_datetime, site_id, family, parameter, variable, duration, prediction, model_id)
 ```
 
 ## Submit forecast
@@ -558,6 +558,7 @@ targets_subset <- targets %>%
 
 RW_model <- targets_subset %>% 
   # fable requires a tsibble object with explicit gaps
+  mutate(datetime = as_date(datetime)) %>% 
   tsibble::as_tsibble(key = c('variable', 'site_id'), index = 'datetime') %>%
   tsibble::fill_gaps() %>%
   model(RW = RW(observation))
@@ -590,6 +591,7 @@ We calculate the `reference_datetime` (starting data) and total `horizon` for ea
 ```{r message=F}
 # For the RW model need to start the forecast at the last non-NA day and then run to 30 days in the future
 forecast_starts <- targets %>%
+  mutate(datetime = as_date(datetime)) %>% 
   filter(!is.na(observation)) %>%
   group_by(site_id, variable) %>%
   # Start the day after the most recent non-NA value
@@ -624,8 +626,9 @@ RW_daily_forecast <- function(site,
   ### TIDY
   # filter the targets data set to the site_var pair
   targets_use <- targets %>%
+    mutate(datetime = as_date(datetime)) %>% 
     dplyr::filter(site_id == site,
-           variable == var) %>%
+                  variable == var) %>%
     tsibble::as_tsibble(key = c('variable', 'site_id'), index = 'datetime') %>%
     
     # add NA values up to today (index)
@@ -836,8 +839,10 @@ RW_forecasts_EFI <- RW_forecast %>%
   filter(datetime > Sys.Date()) %>%
   mutate(reference_datetime = min(datetime) - lubridate::days(1),
          family = 'ensemble',
-         model_id = model_name) %>%
-  select(model_id, datetime, reference_datetime, site_id, family, parameter, variable, prediction) 
+         model_id = model_name,
+         project_id = "neon4cast",
+         duration = "P1D") %>%
+  select(project_id, model_id, datetime, reference_datetime, site_id, family, parameter, duration, variable, prediction) 
 ```
 
 Now we have a forecast that can be submitted to the EFI challenge.
@@ -905,6 +910,7 @@ One useful thing that the fable package can do is that it fits the specified mod
 
 ```{r, warning = F}
 SN_model <- targets %>%
+  mutate(datetime = as_date(datetime)) %>% 
   as_tsibble(key = c('variable', 'site_id'), index = 'datetime') %>%
   # add NA values up to today (index)
   fill_gaps(.end = Sys.Date()) %>%

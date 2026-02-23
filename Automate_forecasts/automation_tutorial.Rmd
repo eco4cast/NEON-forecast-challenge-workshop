@@ -3,7 +3,7 @@ title: "NEON Forecast Challenge - Automation"
 author: Freya Olsson
 output: 
   md_document: 
-    variant: markdown_github
+    variant: gfm
     number_sections: true
     toc: true
 date: "`r Sys.Date()`"
