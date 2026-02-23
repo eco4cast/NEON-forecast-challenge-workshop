@@ -94,21 +94,21 @@ weather_future_daily <- weather_future |>
 # Generate a dataframe to fit the model to 
 targets_lm <- targets |> 
   pivot_wider(names_from = 'variable', values_from = 'observation') |> 
-  left_join(noaa_past_mean, 
+  left_join(weather_past_daily, 
             by = c("datetime","site_id"))
 
 # Loop through each site to fit the model
 forecast_df <- NULL
 
-for(i in 1:length(lake_sites$field_site_id)) {  
+for(i in 1:length(focal_sites$field_site_id)) {  
   
-  example_site <- lake_sites$field_site_id[i]
+  curr_site <- focal_sites$field_site_id[i]
   
   site_target <- targets_lm |>
-    filter(site_id == example_site)
+    filter(site_id == curr_site)
   
-  noaa_future_site <- noaa_future_daily |> 
-    filter(site_id == example_site)
+  noaa_future_site <- weather_future_daily |> 
+    filter(site_id == curr_site)
   
   #Fit linear model based on past data: water temperature = m * air temperature + b
   #you will need to change the variable on the left side of the ~ if you are forecasting oxygen or chla
@@ -122,13 +122,13 @@ for(i in 1:length(lake_sites$field_site_id)) {
   
   # put all the relevant information into a tibble that we can bind together
   curr_site_df <- tibble(datetime = noaa_future_site$datetime,
-                         site_id = example_site,
+                         site_id = curr_site,
                          parameter = noaa_future_site$parameter,
                          prediction = forecasted_temperature,
                          variable = "temperature") #Change this if you are forecasting a different variable
   
   forecast_df <- dplyr::bind_rows(forecast_df, curr_site_df)
-  message(example_site, 'forecast run')
+  message(curr_site, 'forecast run')
   
 }
 
