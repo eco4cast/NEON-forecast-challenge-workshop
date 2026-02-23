@@ -109,8 +109,8 @@ library(lubridate)
 ```
 
 If you do not wish to run the code yourself you can follow along via the
-html (NEON_forecast_challenge_workshop.md), which can be downloaded from
-the [Github
+markdown document (NEON_forecast_challenge_workshop.md), which can be
+downloaded from the [Github
 repository](https://github.com/eco4cast/NEON-forecast-challenge-workshop).
 
 # 2 Introduction to NEON forecast challenge
@@ -151,7 +151,7 @@ Find more information about the aquatics challenge
 
 ## 2.2 Submission requirements
 
-For the Challange, forecasts must include quantified uncertainty. The
+For the Challenge, forecasts must include quantified uncertainty. The
 file can represent uncertainty using an ensemble forecast (multiple
 realizations of future conditions) or a distribution forecast (with mean
 and standard deviation), specified in the family and parameter columns
@@ -187,10 +187,10 @@ targets <- read_csv("https://sdsc.osn.xsede.org/bio230014-bucket01/challenges/ta
 ```
 
 Information on the NEON sites can be found in the
-`NEON_Field_Site_Metadata_20220412.csv` file in the `eco4cast`
-repository on GitHub. It can be filtered to only include aquatic sites.
-This table has information about the field sites, including location,
-ecoregion, information about the watershed (e.g. elevation, mean annual
+`neon4cast_field_site_metadata.csv` file in the `eco4cast` repository on
+GitHub. It can be filtered to only include aquatic sites. This table has
+information about the field sites, including location, ecoregion,
+information about the watershed (e.g. elevation, mean annual
 precipitation and temperature), and lake depth.
 
 ``` r
@@ -216,11 +216,11 @@ Let’s take a look at the targets data!
     ## 10 neon4cast  ARIK    2017-04-26 00:00:00 P1D      temperature       13.0 
     ## 11 neon4cast  ARIK    2017-04-27 00:00:00 P1D      chla              NA
 
-The columns of the targets file show the time step (daily for aquatics
-challenge), the 4 character site code (`site_id`), the variable being
-measured, and the mean daily observation. To look at only the lakes we
-can subset the targets and aquatic sites to those which have the
-`field_site_subtype` of `Lake`.
+The columns of the targets file show the time, time step (daily duration
+the for aquatics challenge), the 4 character site code (`site_id`), the
+variable being measured, and the mean daily observation. To look at only
+the lakes we can subset the targets and aquatic sites to those which
+have the `field_site_subtype` of `Lake`.
 
 ``` r
 lake_sites <- aquatic_sites %>%
@@ -324,16 +324,16 @@ noaa_past
     ## # A tibble: 10,301,641 × 7
     ##    parameter datetime            variable   prediction family reference_datetime
     ##        <dbl> <dttm>              <chr>           <dbl> <chr>  <lgl>             
-    ##  1        19 2021-05-06 02:00:00 air_tempe…       277. ensem… NA                
-    ##  2        20 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  3        21 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  4        22 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  5        23 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  6        24 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  7        25 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  8        26 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ##  9        27 2021-05-06 02:00:00 air_tempe…       278. ensem… NA                
-    ## 10        28 2021-05-06 02:00:00 air_tempe…       277. ensem… NA                
+    ##  1        16 2020-12-24 23:00:00 air_tempe…       295. ensem… NA                
+    ##  2        17 2020-12-24 23:00:00 air_tempe…       295. ensem… NA                
+    ##  3        18 2020-12-24 23:00:00 air_tempe…       295. ensem… NA                
+    ##  4        19 2020-12-24 23:00:00 air_tempe…       294. ensem… NA                
+    ##  5        20 2020-12-24 23:00:00 air_tempe…       294. ensem… NA                
+    ##  6        21 2020-12-24 23:00:00 air_tempe…       294. ensem… NA                
+    ##  7        22 2020-12-24 23:00:00 air_tempe…       295. ensem… NA                
+    ##  8        23 2020-12-24 23:00:00 air_tempe…       295. ensem… NA                
+    ##  9        24 2020-12-24 23:00:00 air_tempe…       295. ensem… NA                
+    ## 10        25 2020-12-24 23:00:00 air_tempe…       294. ensem… NA                
     ## # ℹ 10,301,631 more rows
     ## # ℹ 1 more variable: site_id <chr>
 
@@ -565,7 +565,8 @@ columns:
   times steps in the future. This should only be one value of
   reference_datetime in the file
 - `duration`: the time-step of the forecast. Use the value of P1D for a
-  daily forecast and PT1H for an hourly forecast.
+  daily mean forecast, PT1H for an hourly mean forecast, and P1W for a
+  weekly mean forecast.
 - `site_id`: NEON code for site
 - `family`: name of probability distribution that is described by the
   parameter values in the parameter column; the distribution
@@ -625,7 +626,7 @@ forecast_file_1
     ## [1] "aquatics-2026-02-23-example_ID.csv"
 
 ``` r
-write_csv(temp_lm_forecast_EFI,forecast_file_1)
+write_csv(temp_lm_forecast_EFI, forecast_file_1)
 
 neon4cast::forecast_output_validator(forecast_file_1)
 ```
@@ -695,8 +696,8 @@ couple of reasons:
     model requires a new `model_id`.
 2.  The form gives consent for submissions to be included in
     Challenge-wide syntheses being carried out by the Challenge
-    organisers. Long-term partipants in the Challenge will be invited to
-    join the synthesis projects on an opt-in basis.
+    organisers. Long-term participants in the Challenge will be invited
+    to join the synthesis projects on an opt-in basis.
 
 Questions about the
 [Challenge](https://projects.ecoforecast.org/neon4cast-ci/),
@@ -1007,16 +1008,16 @@ RW_forecast %>%
     ## # Key:       variable, site_id, .model, .rep [200]
     ##    variable    site_id .model datetime   .rep   .sim
     ##    <chr>       <chr>   <chr>  <date>     <chr> <dbl>
-    ##  1 temperature SUGG    RW     2026-02-01 1      14.1
-    ##  2 temperature SUGG    RW     2026-02-02 1      14.2
-    ##  3 temperature SUGG    RW     2026-02-03 1      14.4
-    ##  4 temperature SUGG    RW     2026-02-04 1      15.2
-    ##  5 temperature SUGG    RW     2026-02-05 1      15.5
-    ##  6 temperature SUGG    RW     2026-02-06 1      15.5
-    ##  7 temperature SUGG    RW     2026-02-07 1      16.0
-    ##  8 temperature SUGG    RW     2026-02-08 1      16.5
-    ##  9 temperature SUGG    RW     2026-02-09 1      16.8
-    ## 10 temperature SUGG    RW     2026-02-10 1      16.7
+    ##  1 temperature SUGG    RW     2026-02-01 1      14.3
+    ##  2 temperature SUGG    RW     2026-02-02 1      14.8
+    ##  3 temperature SUGG    RW     2026-02-03 1      15.7
+    ##  4 temperature SUGG    RW     2026-02-04 1      15.8
+    ##  5 temperature SUGG    RW     2026-02-05 1      15.8
+    ##  6 temperature SUGG    RW     2026-02-06 1      16.2
+    ##  7 temperature SUGG    RW     2026-02-07 1      15.6
+    ##  8 temperature SUGG    RW     2026-02-08 1      15.8
+    ##  9 temperature SUGG    RW     2026-02-09 1      14.8
+    ## 10 temperature SUGG    RW     2026-02-10 1      15.1
     ## # ℹ 10,390 more rows
 
 How reasonable are these forecasts?? Is there a way to improve the

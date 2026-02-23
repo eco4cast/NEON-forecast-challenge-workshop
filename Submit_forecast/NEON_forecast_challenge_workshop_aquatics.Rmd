@@ -55,7 +55,7 @@ library(tidyverse)
 library(lubridate)
 ```
 
-If you do not wish to run the code yourself you can follow along via the html (NEON_forecast_challenge_workshop.md), which can be downloaded from the [Github repository](https://github.com/eco4cast/NEON-forecast-challenge-workshop).
+If you do not wish to run the code yourself you can follow along via the markdown document (NEON_forecast_challenge_workshop.md), which can be downloaded from the [Github repository](https://github.com/eco4cast/NEON-forecast-challenge-workshop).
 
 # Introduction to NEON forecast challenge
 
@@ -85,7 +85,7 @@ Find more information about the aquatics challenge [here](https://projects.ecofo
 
 ## Submission requirements
 
-For the Challange, forecasts must include quantified uncertainty.
+For the Challenge, forecasts must include quantified uncertainty.
 The file can represent uncertainty using an ensemble forecast (multiple realizations of future conditions) or a distribution forecast (with mean and standard deviation), specified in the family and parameter columns of the forecast file.
 
 For an ensemble forecast, the `family` column uses the word `ensemble` to designate that it is a ensemble forecast and the parameter column is the ensemble member number (1, 2, 3 ...).
@@ -108,7 +108,8 @@ Here is how you read in the data from the targets file available from the EFI se
 targets <- read_csv("https://sdsc.osn.xsede.org/bio230014-bucket01/challenges/targets/project_id=neon4cast/duration=P1D/aquatics-targets.csv.gz")
 ```
 
-Information on the NEON sites can be found in the `NEON_Field_Site_Metadata_20220412.csv` file in the `eco4cast` repository on GitHub. It can be filtered to only include aquatic sites.
+Information on the NEON sites can be found in the `neon4cast_field_site_metadata.csv` file in the `eco4cast` repository on GitHub.
+It can be filtered to only include aquatic sites.
 This table has information about the field sites, including location, ecoregion, information about the watershed (e.g. elevation, mean annual precipitation and temperature), and lake depth.
 
 ```{r eval=TRUE, echo = TRUE, error=FALSE, warning=FALSE, message=FALSE}
@@ -124,7 +125,7 @@ targets[1000:1010,]
 
 ```
 
-The columns of the targets file show the time step (daily for aquatics challenge), the 4 character site code (`site_id`), the variable being measured, and the mean daily observation.
+The columns of the targets file show the time, time step (daily duration the for aquatics challenge), the 4 character site code (`site_id`), the variable being measured, and the mean daily observation.
 To look at only the lakes we can subset the targets and aquatic sites to those which have the `field_site_subtype` of `Lake`.
 
 ```{r}
@@ -377,16 +378,17 @@ temp_lm_forecast %>%
   ggplot(.,aes(x=datetime, y=prediction, group = parameter)) + 
   geom_point(data = targets,aes(x=datetime, y=observation, group = 'obs'), colour = 'darkblue') +
   geom_line(alpha = 0.3, aes(colour = 'ensemble member (parameter)')) + 
-  facet_wrap(~site_id, scales = 'free_y') +
+  facet_wrap(~site_id, ncol = 4) +
   scale_x_date(expand = c(0,0), date_labels = "%d %b") +
   labs(y = 'value') +
-  geom_vline(aes(linetype = 'reference_datetime', xintercept = Sys.Date()), colour = 'blue', size = 1.5) +
+    geom_vline(aes(linetype = 'reference_datetime', xintercept = Sys.Date()), colour = 'blue', size = 1.25) +
   labs(title = 'site_id', subtitle = 'variable = temperature', caption = 'prediction') + 
-  annotate("text", x = Sys.Date() - days(10), y = 20, label = "past")  +
-  annotate("text", x = Sys.Date() + days(12), y = 20, label = "future")  +
+  annotate("text", x = Sys.Date() - days(8), y = 35, label = "past", color = "red")  +
+  annotate("text", x = Sys.Date() + days(12), y = 35, label = "future", color = "red")  +
   theme_bw() +
   coord_cartesian(xlim = c(min(temp_lm_forecast$datetime) - 15,
-                           Sys.Date() + 30)) +
+                           Sys.Date() + 30),
+                  ylim  = c(-15, 40)) +
   scale_linetype_manual(values = 'dashed', name = '') +
   scale_colour_manual(values = 'darkgrey', name = '') +
   theme(strip.text = element_text(colour = 'orange'),
@@ -396,7 +398,8 @@ temp_lm_forecast %>%
         axis.text.x = element_text(colour = 'red'),
         plot.caption = element_text(hjust = 0, colour = 'purple'),
         plot.title = element_text(colour = 'orange'), 
-        plot.subtitle = element_text(colour = 'green')) 
+        plot.subtitle = element_text(colour = 'green'),
+        legend.position = "bottom")
 ```
 
 ## Convert to EFI standard for submission
@@ -406,7 +409,7 @@ For an ensemble forecast the documentation specifies the following columns:
 -   `project_id`: use `neon4cast`.
 -   `datetime`: forecast timestamp for each time step
 -   `reference_datetime`: The start of the forecast; this should be 0 times steps in the future. This should only be one value of reference_datetime in the file
--   `duration`: the time-step of the forecast. Use the value of P1D for a daily forecast and PT1H for an hourly forecast.
+-   `duration`: the time-step of the forecast. Use the value of P1D for a daily mean forecast, PT1H for an hourly mean forecast, and P1W for a weekly mean forecast.
 -   `site_id`: NEON code for site
 -   `family`: name of probability distribution that is described by the parameter values in the parameter column; the distribution e.g,(`normal`) or `ensemble` are allowed.
 -   `parameter`: integer value for forecast replicate
@@ -453,7 +456,7 @@ forecast_file_1 <- paste(theme, date, forecast_name_1, sep = '-')
 forecast_file_1
 
 
-write_csv(temp_lm_forecast_EFI,forecast_file_1)
+write_csv(temp_lm_forecast_EFI, forecast_file_1)
 
 neon4cast::forecast_output_validator(forecast_file_1)
 
@@ -498,16 +501,15 @@ We ask that you complete this [form](https://forms.gle/kg2Vkpho9BoMXSy57) which 
 This is crucial for a couple of reasons:
 
 1.  We can keep track different forecast submissions during the scoring process to see which forecast is performing the best. Your `model_id` will be used to track the submissions so any new forecast model requires a new `model_id`.
-2.  The form gives consent for submissions to be included in Challenge-wide syntheses being carried out by the Challenge organisers. Long-term partipants in the Challenge will be invited to join the synthesis projects on an opt-in basis.
+2.  The form gives consent for submissions to be included in Challenge-wide syntheses being carried out by the Challenge organisers. Long-term participants in the Challenge will be invited to join the synthesis projects on an opt-in basis.
 
 Questions about the [Challenge](https://projects.ecoforecast.org/neon4cast-ci/), registration and synthesis participation can be directed to [Challenge Organisers](mailto:eco4cast.initiative@gmail.com).
 
 ------------------------------------------------------------------------
 
-
 # Alternative forecasting approaches
 
-The following sections provide additional information on other simple forecasting methods that could be used to generate ecological forecasts for the NEON Forecasting Challenge. 
+The following sections provide additional information on other simple forecasting methods that could be used to generate ecological forecasts for the NEON Forecasting Challenge.
 
 ## Model 2: Persistence
 
@@ -781,9 +783,7 @@ For an ensemble forecast the documentation specifies the following columns:
 
 -   `project_id`: use `neon4cast`.
 -   `datetime`: forecast timestamp for each time step
--   `reference_datetime`: The start of the forecast; this should be 0
-    times steps in the future. This should only be one value of
-    reference_datetime in the file
+-   `reference_datetime`: The start of the forecast; this should be 0 times steps in the future. This should only be one value of reference_datetime in the file
 -   `duration`: the time-step of the forecast. Use the value of P1D for a daily forecast and PT1H for an hourly forecast.
 -   `site_id`: NEON code for site
 -   `family`: name of probability distribution that is described by the parameter values in the parameter column; only `normal` or `ensemble` are currently allowed.
@@ -944,9 +944,7 @@ The columns needed for a distributional forecast are:
 
 -   `project_id`: use `neon4cast`.
 -   `datetime`: forecast timestamp for each time step
--   `reference_datetime`: The start of the forecast; this should be 0
-    times steps in the future. This should only be one value of
-    reference_datetime in the file
+-   `reference_datetime`: The start of the forecast; this should be 0 times steps in the future. This should only be one value of reference_datetime in the file
 -   `duration`: the time-step of the forecast. Use the value of P1D for a daily forecast and PT1H for an hourly forecast.
 -   `site_id`: NEON code for site
 -   `family`: name of probability distribution that is described by the parameter values in the parameter column; only normal or ensemble is currently allowed
