@@ -100,9 +100,9 @@ targets_lm <- targets |>
 # Loop through each site to fit the model
 forecast_df <- NULL
 
-for(i in 1:length(focal_sites$field_site_id)) {  
+for(i in 1:length(focal_sites)) {  
   
-  curr_site <- focal_sites$field_site_id[i]
+  curr_site <- focal_sites[i]
   
   site_target <- targets_lm |>
     filter(site_id == curr_site)
